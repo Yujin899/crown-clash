@@ -131,7 +131,7 @@ const InviteOverlay = ({ invite, onAccept, onDecline }) => {
         }}></div>
         
         {/* Red vignette */}
-        <div className="main-card relative bg-gradient-to-br from-[#1a2332] to-[#0f1923] border-2 border-red-500 shadow-2xl max-w-md w-full mx-4 overflow-hidden clip-path-notch">
+        <div className="main-card relative bg-gradient-to-br from-[#1a2332] to-[#0f1923] border-2 border-red-500 shadow-2xl max-w-md w-full mx-4 sm:mx-4 overflow-hidden clip-path-notch">
           {/* Animated glow */}
           <div className="absolute inset-0 bg-gradient-to-br from-red-500/20 to-transparent animate-pulse"></div>
           
@@ -142,37 +142,37 @@ const InviteOverlay = ({ invite, onAccept, onDecline }) => {
           <div className="corner-accent absolute bottom-0 right-0 w-8 h-8 border-r-4 border-b-4 border-red-500"></div>
 
           {/* Content */}
-          <div className="relative z-10 p-8">
+          <div className="relative z-10 p-4 sm:p-6 md:p-8">
             {/* Header */}
-            <div className="header-section text-center mb-6">
-              <div className="flex items-center justify-center gap-3 mb-3">
-                <Swords className="icon-pulse text-red-500" size={40} />
-                <h2 className="text-3xl font-black uppercase tracking-wider text-red-500" style={{
+            <div className="header-section text-center mb-4 sm:mb-6">
+              <div className="flex items-center justify-center gap-2 sm:gap-3 mb-2 sm:mb-3">
+                <Swords className="icon-pulse text-red-500" size={32} />
+                <h2 className="text-2xl sm:text-3xl font-black uppercase tracking-wider text-red-500" style={{
                   textShadow: '0 0 20px rgba(239, 68, 68, 0.6)'
                 }}>
                   CHALLENGE
                 </h2>
-                <Swords className="icon-pulse text-red-500" size={40} />
+                <Swords className="icon-pulse text-red-500" size={32} />
               </div>
               <div className="challenge-bar h-1 bg-gradient-to-r from-transparent via-red-500 to-transparent"></div>
             </div>
 
             {/* Sender Info with Avatar */}
-            <div className="sender-info flex items-center justify-center gap-4 mb-6 p-4 bg-black/30 border border-red-500/30 clip-path-notch">
+            <div className="sender-info flex items-center justify-center gap-3 sm:gap-4 mb-4 sm:mb-6 p-3 sm:p-4 bg-black/30 border border-red-500/30 clip-path-notch">
               {invite?.fromAvatar?.url ? (
                 <img 
                   src={invite.fromAvatar.url} 
                   alt={invite.fromName || 'Player'}
-                  className="w-16 h-16 border-2 border-red-500 clip-path-notch object-cover"
+                  className="w-12 h-12 sm:w-16 sm:h-16 border-2 border-red-500 clip-path-notch object-cover"
                 />
               ) : (
-                <div className="w-16 h-16 bg-red-500/20 border-2 border-red-500 clip-path-notch flex items-center justify-center">
-                  <Swords size={32} className="text-red-500" />
+                <div className="w-12 h-12 sm:w-16 sm:h-16 bg-red-500/20 border-2 border-red-500 clip-path-notch flex items-center justify-center">
+                  <Swords size={24} className="text-red-500" />
                 </div>
               )}
               <div className="text-left">
                 <p className="text-gray-400 text-xs uppercase tracking-wider mb-1">Challenger</p>
-                <p className="text-white font-bold text-xl">{invite?.fromName || 'Unknown Player'}</p>
+                <p className="text-white font-bold text-base sm:text-xl">{invite?.fromName || 'Unknown Player'}</p>
               </div>
             </div>
 
@@ -192,31 +192,31 @@ const InviteOverlay = ({ invite, onAccept, onDecline }) => {
             </div>
           </div>
           
-          <h1 className="text-4xl md:text-6xl lg:text-7xl font-black uppercase text-white mb-3 drop-shadow-[0_0_20px_rgba(255,255,255,0.3)]" style={{
+          <h1 className="text-3xl sm:text-4xl md:text-6xl lg:text-7xl font-black uppercase text-white mb-2 sm:mb-3 drop-shadow-[0_0_20px_rgba(255,255,255,0.3)] px-2" style={{
             textShadow: '0 0 10px rgba(239,68,68,0.5)'
           }}>
             {invite.senderName}
           </h1>
-          <p className="text-red-500 font-bold tracking-[0.2em] text-sm uppercase">
+          <p className="text-red-500 font-bold tracking-[0.15em] sm:tracking-[0.2em] text-xs sm:text-sm uppercase px-2">
             HAS CHALLENGED YOU
           </p>
         </div>
 
         {/* Action Buttons */}
-        <div className="flex flex-col sm:flex-row justify-center gap-4 mb-8">
+        <div className="flex flex-col sm:flex-row justify-center gap-3 sm:gap-4 mb-6 sm:mb-8 px-4">
           <button 
             onClick={onDecline}
-            className="action-button group relative px-8 py-4 bg-transparent border-2 border-gray-600 hover:border-red-500 text-gray-400 hover:text-white transition-all overflow-hidden"
+            className="action-button group relative px-6 sm:px-8 py-3 sm:py-4 bg-transparent border-2 border-gray-600 hover:border-red-500 text-gray-400 hover:text-white transition-all overflow-hidden order-2 sm:order-1"
           >
-            <span className="flex items-center justify-center gap-2 font-bold uppercase tracking-wider">
-              <X size={20} />
+            <span className="flex items-center justify-center gap-2 font-bold uppercase tracking-wider text-sm">
+              <X size={18} />
               DECLINE
             </span>
           </button>
 
           <button 
             onClick={onAccept}
-            className="action-button group relative px-12 py-4 bg-red-500 hover:bg-red-600 text-white shadow-[0_0_30px_rgba(239,68,68,0.5)] transition-all overflow-hidden"
+            className="action-button group relative px-8 sm:px-12 py-3 sm:py-4 bg-red-500 hover:bg-red-600 text-white shadow-[0_0_30px_rgba(239,68,68,0.5)] transition-all overflow-hidden order-1 sm:order-2"
           >
             {/* Shine effect */}
             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-500"></div>
@@ -233,7 +233,7 @@ const InviteOverlay = ({ invite, onAccept, onDecline }) => {
         </div>
 
         {/* Timer Bar */}
-        <div className="w-full max-w-md mx-auto">
+        <div className="w-full max-w-md mx-auto px-4">
           <div className="h-2 bg-gray-800/50 border border-red-500/30 overflow-hidden relative">
             <div 
               ref={timerBarRef}

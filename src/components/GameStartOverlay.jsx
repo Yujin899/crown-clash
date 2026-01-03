@@ -302,8 +302,8 @@ const GameStartOverlay = ({ myPlayer, enemyPlayer, countdown: initialCountdown =
         </div>
 
         {/* Countdown - repositioned to be inside the viewport */}
-        <div className="mt-4 md:mt-6">
-          <div className="countdown-number inline-flex items-center justify-center w-16 h-16 md:w-20 md:h-20 bg-red-500 border-2 md:border-4 border-red-400 relative will-change-transform">
+        <div className="mt-4 md:mt-6 flex flex-col items-center">
+          <div className="countdown-number flex items-center justify-center w-16 h-16 md:w-20 md:h-20 bg-red-500 border-2 md:border-4 border-red-400 relative will-change-transform">
             <span className="text-3xl md:text-5xl font-black text-white">{currentCount === 0 ? 'GO!' : currentCount}</span>
             
             {/* Pulse ring */}

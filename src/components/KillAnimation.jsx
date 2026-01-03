@@ -166,10 +166,10 @@ const KillAnimation = ({ mode, enemyAvatar, onComplete }) => {
           {/* Content */}
           <div className="relative z-10 text-center">
             {/* Top accent line */}
-            <div className="victory-line h-[2px] w-64 mx-auto mb-8 bg-gradient-to-r from-transparent via-emerald-400 to-transparent"></div>
+            <div className="victory-line h-[2px] w-40 sm:w-48 md:w-64 mx-auto mb-6 md:mb-8 bg-gradient-to-r from-transparent via-emerald-400 to-transparent"></div>
 
             {/* Main Text */}
-            <h1 className="victory-main-text text-8xl md:text-9xl font-black uppercase tracking-tight opacity-0" style={{
+            <h1 className="victory-main-text text-5xl sm:text-6xl md:text-8xl lg:text-9xl font-black uppercase tracking-tight opacity-0 px-4" style={{
               color: '#10b981',
               textShadow: '0 0 40px rgba(16, 185, 129, 0.5)',
               fontFamily: 'system-ui, -apple-system, sans-serif',
@@ -179,10 +179,10 @@ const KillAnimation = ({ mode, enemyAvatar, onComplete }) => {
             </h1>
 
             {/* Bottom accent line */}
-            <div className="victory-line h-[2px] w-64 mx-auto mt-8 mb-6 bg-gradient-to-r from-transparent via-emerald-400 to-transparent"></div>
+            <div className="victory-line h-[2px] w-40 sm:w-48 md:w-64 mx-auto mt-6 md:mt-8 mb-4 md:mb-6 bg-gradient-to-r from-transparent via-emerald-400 to-transparent"></div>
 
             {/* Subtitle */}
-            <p className="victory-subtitle text-emerald-300 text-xl font-semibold uppercase tracking-[0.3em] opacity-0">
+            <p className="victory-subtitle text-emerald-300 text-base sm:text-lg md:text-xl font-semibold uppercase tracking-[0.2em] sm:tracking-[0.25em] md:tracking-[0.3em] opacity-0">
               Mission Success
             </p>
           </div>
@@ -200,10 +200,10 @@ const KillAnimation = ({ mode, enemyAvatar, onComplete }) => {
           {/* Content */}
           <div className="relative z-10 text-center">
             {/* Top accent line */}
-            <div className="defeat-line h-[3px] w-72 mx-auto mb-8 bg-gradient-to-r from-transparent via-red-500 to-transparent"></div>
+            <div className="defeat-line h-[2px] sm:h-[3px] w-48 sm:w-56 md:w-72 mx-auto mb-6 md:mb-8 bg-gradient-to-r from-transparent via-red-500 to-transparent"></div>
 
             {/* Main Text */}
-            <h1 className="defeat-main-text text-8xl md:text-9xl font-black uppercase tracking-tight opacity-0" style={{
+            <h1 className="defeat-main-text text-5xl sm:text-6xl md:text-8xl lg:text-9xl font-black uppercase tracking-tight opacity-0 px-4" style={{
               color: '#ef4444',
               textShadow: '0 0 40px rgba(239, 68, 68, 0.6)',
               fontFamily: 'system-ui, -apple-system, sans-serif',
@@ -213,10 +213,10 @@ const KillAnimation = ({ mode, enemyAvatar, onComplete }) => {
             </h1>
 
             {/* Bottom accent line */}
-            <div className="defeat-line h-[3px] w-72 mx-auto mt-8 mb-6 bg-gradient-to-r from-transparent via-red-500 to-transparent"></div>
+            <div className="defeat-line h-[2px] sm:h-[3px] w-48 sm:w-56 md:w-72 mx-auto mt-6 md:mt-8 mb-4 md:mb-6 bg-gradient-to-r from-transparent via-red-500 to-transparent"></div>
 
             {/* Subtitle */}
-            <p className="defeat-subtitle text-red-300 text-lg font-medium uppercase tracking-[0.4em] opacity-0">
+            <p className="defeat-subtitle text-red-300 text-sm sm:text-base md:text-lg font-medium uppercase tracking-[0.3em] sm:tracking-[0.35em] md:tracking-[0.4em] opacity-0">
               Eliminated
             </p>
           </div>
@@ -234,24 +234,24 @@ const KillAnimation = ({ mode, enemyAvatar, onComplete }) => {
           {/* Content */}
           <div className="relative z-10 text-center">
             {/* Top line */}
-            <div className="backfire-line h-[2px] w-64 mx-auto mb-6 bg-gradient-to-r from-transparent via-orange-500 to-transparent"></div>
+            <div className="backfire-line h-[2px] w-40 sm:w-48 md:w-64 mx-auto mb-4 md:mb-6 bg-gradient-to-r from-transparent via-orange-500 to-transparent"></div>
 
             {/* Text */}
             <div className="backfire-text opacity-0">
-              <h1 className="text-6xl md:text-7xl font-black uppercase tracking-tight mb-4" style={{
+              <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black uppercase tracking-tight mb-3 md:mb-4 px-4" style={{
                 color: '#f59e0b',
                 textShadow: '0 0 30px rgba(245, 158, 11, 0.5)',
                 fontFamily: 'system-ui, -apple-system, sans-serif'
               }}>
                 WEAPON JAMMED
               </h1>
-              <p className="text-orange-300 text-base uppercase tracking-[0.3em] font-medium">
+              <p className="text-orange-300 text-xs sm:text-sm md:text-base uppercase tracking-[0.2em] sm:tracking-[0.25em] md:tracking-[0.3em] font-medium px-4">
                 Low Accuracy - Mission Failed
               </p>
             </div>
 
             {/* Bottom line */}
-            <div className="backfire-line h-[2px] w-64 mx-auto mt-6 bg-gradient-to-r from-transparent via-orange-500 to-transparent"></div>
+            <div className="backfire-line h-[2px] w-40 sm:w-48 md:w-64 mx-auto mt-4 md:mt-6 bg-gradient-to-r from-transparent via-orange-500 to-transparent"></div>
           </div>
         </>
       )}

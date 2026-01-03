@@ -232,9 +232,11 @@ const Dashboard = () => {
 
   const acceptFriendRequest = useCallback(async (request) => {
     try {
-      // Update both players' friend lists in Firestore
-      await updateDoc(doc(db, 'players', user.uid), { friends: arrayUnion(request.from) });
-      await updateDoc(doc(db, 'players', request.from), { friends: arrayUnion(user.uid) });
+      // Update both players' friend lists in Firestore (this triggers real-time updates via onSnapshot)
+      await Promise.all([
+        updateDoc(doc(db, 'players', user.uid), { friends: arrayUnion(request.from) }),
+        updateDoc(doc(db, 'players', request.from), { friends: arrayUnion(user.uid) })
+      ]);
       
       // Remove request from Realtime DB
       await remove(ref(rtdb, `friendRequests/${user.uid}/${request.id}`));
@@ -243,6 +245,24 @@ const Dashboard = () => {
     } catch (error) {
       console.error('Accept friend error:', error);
       toast.error('FAILED TO ACCEPT');
+    }
+  }, [user.uid]);
+
+  const deleteFriend = useCallback(async (friendUid, friendName) => {
+    try {
+      // Import arrayRemove from firestore
+      const { arrayRemove } = await import('firebase/firestore');
+      
+      // Remove friend from both users' friend lists
+      await Promise.all([
+        updateDoc(doc(db, 'players', user.uid), { friends: arrayRemove(friendUid) }),
+        updateDoc(doc(db, 'players', friendUid), { friends: arrayRemove(user.uid) })
+      ]);
+      
+      toast.success(`REMOVED ${friendName.toUpperCase()} FROM SQUAD`);
+    } catch (error) {
+      console.error('Delete friend error:', error);
+      toast.error('FAILED TO REMOVE FRIEND');
     }
   }, [user.uid]);
 
@@ -494,6 +514,7 @@ const Dashboard = () => {
             onSearchChange={handleSearchChange}
             searchResults={searchResults}
             onSendRequest={sendFriendRequest}
+            onDeleteFriend={deleteFriend}
             userData={userData}
             allPlayers={allPlayers}
           />
@@ -578,7 +599,7 @@ const CombatTab = memo(({ subjects, onSubjectClick, userData }) => (
 ));
 
 // Community Tab Component
-const CommunityTab = memo(({ searchQuery, onSearchChange, searchResults, onSendRequest, userData, allPlayers }) => {
+const CommunityTab = memo(({ searchQuery, onSearchChange, searchResults, onSendRequest, onDeleteFriend, userData, allPlayers }) => {
   const friends = useMemo(() => {
     if (!userData?.friends) return [];
     return allPlayers.filter(p => userData.friends.includes(p.uid));
@@ -647,16 +668,31 @@ const CommunityTab = memo(({ searchQuery, onSearchChange, searchResults, onSendR
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {friends.map((friend) => (
-              <div key={friend.uid} className="bg-[#1a2332]/70 border border-red-500/20 p-4 flex items-center gap-3">
-                {friend.avatar?.url && (
-                  <div className="w-12 h-12 border border-red-500/30 overflow-hidden">
-                    <img src={friend.avatar.url} alt="" className="w-full h-full object-cover" />
+              <div key={friend.uid} className="bg-[#1a2332]/70 border border-red-500/20 p-4 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  {friend.avatar?.url && (
+                    <div className="w-12 h-12 border border-red-500/30 overflow-hidden">
+                      <img src={friend.avatar.url} alt="" className="w-full h-full object-cover" />
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-white font-bold text-sm">{friend.displayName}</p>
+                    <p className="text-red-500 text-xs uppercase">{friend.avatar?.role || 'Agent'}</p>
                   </div>
-                )}
-                <div>
-                  <p className="text-white font-bold text-sm">{friend.displayName}</p>
-                  <p className="text-red-500 text-xs uppercase">{friend.avatar?.role || 'Agent'}</p>
                 </div>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => {
+                    if (window.confirm(`Remove ${friend.displayName} from your squad?`)) {
+                      onDeleteFriend(friend.uid, friend.displayName);
+                    }
+                  }}
+                  className="bg-transparent border border-red-500/50 hover:bg-red-500/10 hover:border-red-500 text-red-500 px-3 py-2 text-xs font-bold uppercase transition-all"
+                  title="Remove friend"
+                >
+                  <XCircle size={14} />
+                </motion.button>
               </div>
             ))}
           </div>
