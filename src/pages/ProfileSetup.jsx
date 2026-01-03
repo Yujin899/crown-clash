@@ -34,12 +34,6 @@ const AGENTS = [
     image: viperImg
   },
   {
-    id: 'recon',
-    name: 'RECON',
-    role: 'SCOUT',
-    image: reconImg
-  },
-  {
     id: 'shadow',
     name: 'SHADOW',
     role: 'ASSASSIN',

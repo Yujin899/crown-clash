@@ -20,6 +20,10 @@ import ChatSidebar from '../components/ChatSidebar';
 import InviteOverlay from '../components/InviteOverlay';
 import { SubjectModal } from '../components/dashboard';
 
+// Utils
+import { getRankFromXP } from '../utils/rankingSystem';
+import { runCleanupTasks } from '../utils/cleanup';
+
 const Dashboard = () => {
   const { user } = useSelector((state) => state.auth);
   const dispatch = useDispatch();
@@ -60,6 +64,11 @@ const Dashboard = () => {
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
   }, [isNotifOpen]);
+
+  // Cleanup old game data on mount (runs once per session)
+  useEffect(() => {
+    runCleanupTasks();
+  }, []);
 
   useEffect(() => {
     if (!user?.uid) return;
@@ -526,9 +535,9 @@ const CombatTab = memo(({ subjects, onSubjectClick, userData }) => (
     {/* Stats Row */}
     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
       <StatCard icon={Trophy} label="WINS" value={userData?.wins || 0} color="red" />
-      <StatCard icon={Target} label="MATCHES" value={userData?.matchesPlayed || 0} color="red" />
+      <StatCard icon={Target} label="MATCHES" value={userData?.matches || 0} color="red" />
       <StatCard icon={Shield} label="XP" value={userData?.xp || 0} color="red" />
-      <StatCard icon={Swords} label="RANK" value={userData?.rank || 'UNRANKED'} color="red" isText />
+      <StatCard icon={Swords} label="RANK" value={getRankFromXP(userData?.xp || 0).name} color="red" isText />
     </div>
 
     {/* Subjects Grid */}
@@ -544,7 +553,7 @@ const CombatTab = memo(({ subjects, onSubjectClick, userData }) => (
             whileHover={{ scale: 1.02, y: -2 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => onSubjectClick(subject)}
-            className="group relative bg-[#1a2332]/70 backdrop-blur-sm border border-red-500/30 hover:border-red-500 p-6 cursor-pointer transition-all overflow-hidden"
+            className="group relative bg-[#1a2332]/70 backdrop-blur-sm border border-red-500/30 hover:border-red-500 p-6 cursor-pointer transition-all overflow-hidden clip-path-notch"
           >
             {/* Hover effect */}
             <div className="absolute inset-0 bg-red-500/0 group-hover:bg-red-500/5 transition-all"></div>
@@ -597,7 +606,7 @@ const CommunityTab = memo(({ searchQuery, onSearchChange, searchResults, onSendR
         {searchResults.length > 0 && (
           <div className="mt-3 space-y-2">
             {searchResults.map((player) => (
-              <div key={player.uid} className="bg-[#1a2332]/70 border border-red-500/20 p-4 flex items-center justify-between">
+              <div key={player.uid} className="bg-[#1a2332]/70 border border-red-500/20 p-4 flex items-center justify-between clip-path-notch">
                 <div className="flex items-center gap-3">
                   {player.avatar?.url && (
                     <div className="w-10 h-10 border border-red-500/30 overflow-hidden">
@@ -683,7 +692,7 @@ const ProfileTab = memo(({ userData, user }) => (
           <div className="flex flex-wrap gap-3 justify-center md:justify-start">
             <div className="bg-black/30 px-4 py-2 border border-red-500/20">
               <p className="text-red-500 text-xs font-bold">RANK</p>
-              <p className="text-white text-lg font-black">{userData?.rank || 'UNRANKED'}</p>
+              <p className="text-white text-lg font-black">{getRankFromXP(userData?.xp || 0).name}</p>
             </div>
             <div className="bg-black/30 px-4 py-2 border border-red-500/20">
               <p className="text-red-500 text-xs font-bold">TOTAL XP</p>
@@ -691,7 +700,7 @@ const ProfileTab = memo(({ userData, user }) => (
             </div>
             <div className="bg-black/30 px-4 py-2 border border-red-500/20">
               <p className="text-red-500 text-xs font-bold">W/L</p>
-              <p className="text-white text-lg font-black">{userData?.wins || 0}/{(userData?.matchesPlayed || 0) - (userData?.wins || 0)}</p>
+              <p className="text-white text-lg font-black">{userData?.wins || 0}/{Math.max(0, (userData?.matches || 0) - (userData?.wins || 0))}</p>
             </div>
           </div>
         </div>
@@ -706,10 +715,10 @@ const ProfileTab = memo(({ userData, user }) => (
         <p className="text-3xl font-black text-white mb-1">{userData?.wins || 0}</p>
         <p className="text-red-500 text-xs font-bold uppercase">Victories</p>
       </div>
-      <div className="bg-[#1a2332]/70 border border-red-500/20 p-6 text-center">
-        <Target size={32} className="text-red-500 mx-auto mb-2" />
-        <p className="text-3xl font-black text-white mb-1">{userData?.matchesPlayed || 0}</p>
-        <p className="text-red-500 text-xs font-bold uppercase">Battles</p>
+      <div className="bg-[#1a2332]/80 backdrop-blur-sm border border-red-500/20 p-6 clip-path-notch">
+        <p className="text-red-500 text-xs font-bold uppercase tracking-wider mb-2">Matches Played</p>
+        <p className="text-3xl font-black text-white mb-1">{userData?.matches || 0}</p>
+        <p className="text-gray-400 text-xs">Total engagements</p>
       </div>
     </div>
   </div>

@@ -119,19 +119,17 @@ function App() {
     <div className="min-h-screen bg-[#0f1923] text-white relative overflow-hidden">
       {/* Valorant Background */}
       <div className="fixed inset-0 pointer-events-none z-0">
-        {/* Red gradient */}
-        <div className="absolute inset-0 bg-gradient-to-br from-red-950/20 via-[#0f1923] to-red-950/10"></div>
+        {/* Dark background */}
+        <div className="absolute inset-0 bg-[#0f1923]"></div>
         
-        {/* Subtle red grid */}
-        <div className="absolute inset-0 opacity-[0.03]" style={{
-          backgroundImage: `linear-gradient(rgba(239,68,68,0.5) 1px, transparent 1px),
-                           linear-gradient(90deg, rgba(239,68,68,0.5) 1px, transparent 1px)`,
+        {/* Subtle white grid */}
+        <div className="absolute inset-0 opacity-[0.02]" style={{
+          backgroundImage: `linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px),
+                           linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)`,
           backgroundSize: '50px 50px'
         }}></div>
         
-        {/* Red accent lights */}
-        <div className="absolute top-0 right-0 w-96 h-96 bg-red-500/10 blur-[120px]"></div>
-        <div className="absolute bottom-0 left-0 w-96 h-96 bg-red-500/10 blur-[120px]"></div>
+
       </div>
 
       {/* Main content */}

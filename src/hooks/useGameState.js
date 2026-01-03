@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { ref, onValue, update, onDisconnect } from 'firebase/database';
+import { ref, onValue, update, onDisconnect, set } from 'firebase/database';
 import { doc, updateDoc, increment } from 'firebase/firestore';
 import { rtdb, db } from '../firebaseConfig';
 
@@ -19,6 +19,7 @@ export const useGameState = (roomId, user, navigate) => {
   const [animationType, setAnimationType] = useState(null); // 'kill', 'backfire', 'victim'
 
   const processingRef = useRef(false);
+  const animationShownRef = useRef(false); // Track if animation already shown
 
   const myId = user?.uid;
   const enemyId = game?.players ? Object.keys(game.players).find(id => id !== myId) : null;
@@ -49,20 +50,29 @@ export const useGameState = (roomId, user, navigate) => {
       }
 
       setGame(data);
-
-      // Handle enemy disconnect - ONLY if game is in combat mode
-      if (data.state === 'combat' && enemyId && data.players[enemyId]?.connected === false && !data.winner) {
-        update(ref(rtdb, `games/${roomId}`), { 
-          winner: myId, 
-          reason: 'enemy_left' 
+      
+      // Debug: Log game data when winner is set
+      if (data.winner && data.state === 'finished') {
+        console.log('🎮 Game finished - Full data:', {
+          winner: data.winner,
+          reason: data.reason,
+          players: Object.keys(data.players || {}).map(pid => ({
+            id: pid,
+            name: data.players[pid].name,
+            hasAnswers: !!data.players[pid].answers,
+            answersCount: data.players[pid].answers ? Object.keys(data.players[pid].answers).length : 0
+          }))
         });
       }
 
-      // Handle enemy kill (VICTIM VIEW)
-      if (data.winner && data.winner !== myId && data.winner !== 'DRAW' && !isShot) {
-        setIsShot(true);
-        // Trigger victim animation which will show the killer
-        setAnimationType('victim');
+      // Handle enemy disconnect - ONLY if game is in combat mode  
+      if (data.state === 'combat' && enemyId && data.players[enemyId]?.connected === false && !data.winner) {
+        console.log('⚠️ Enemy disconnected - ending game');
+        update(ref(rtdb, `games/${roomId}`), { 
+          winner: myId, 
+          reason: 'disconnect',
+          state: 'finished'
+        });
       }
     });
 
@@ -112,7 +122,6 @@ export const useGameState = (roomId, user, navigate) => {
         setCombatTimer(seconds > 0 ? seconds : 0);
 
         // Auto-end game on timeout (host only)
-        // STRICT CHECK: Only trigger if game is actually in 'combat' state to prevent premature ends during startup
         if (seconds <= 0 && isHost && !game.winner && roomId && game.state === 'combat') {
           update(ref(rtdb, `games/${roomId}`), { winner: 'DRAW' });
         }
@@ -143,17 +152,52 @@ export const useGameState = (roomId, user, navigate) => {
     }
   }, [myAnswers, game, myId, myPlayer, roomId]);
 
-  // Answer handler
-  const handleAnswer = useCallback((qIndex, option) => {
-    if (!roomId || !myId) return;
+  // ⭐ IMPROVED: Answer handler with ANTI-SPAM detection
+  const handleAnswer = useCallback(async (qIndex, option) => {
+    if (!roomId || !myId || !game) return;
     
+    const now = Date.now();
+    
+    // Save answer and timestamp
     setMyAnswers(prev => ({ ...prev, [qIndex]: option }));
-    update(ref(rtdb, `games/${roomId}/players/${myId}/answers/${qIndex}`), option);
-  }, [roomId, myId]);
+    await set(ref(rtdb, `games/${roomId}/players/${myId}/answers/${qIndex}`), option);
+    await set(ref(rtdb, `games/${roomId}/players/${myId}/answerTimestamps/${qIndex}`), now);
+
+    // ANTI-SPAM DETECTION: Check last 5 answers
+    const myPlayerData = game.players[myId];
+    const allAnswers = { ...(myPlayerData?.answers || {}), [qIndex]: option };
+    const allTimestamps = { ...(myPlayerData?.answerTimestamps || {}), [qIndex]: now };
+    
+    if (Object.keys(allAnswers).length >= 5) {
+      // Get last 5 answers by sorting timestamps  
+      const sortedEntries = Object.entries(allTimestamps).sort(([, a], [, b]) => b - a).slice(0, 5);
+      const recentIndices = sortedEntries.map(([idx]) => idx);
+      const timestamps = sortedEntries.map(([, ts]) => ts);
+      const timeSpan = (Math.max(...timestamps) - Math.min(...timestamps)) / 1000; // seconds
+      
+      // Count wrong answers in recent 5
+      const wrongCount = recentIndices.filter(idx => {
+        const ans = allAnswers[idx];
+        const q = game.questions[parseInt(idx)];
+        return ans !== q?.correctAnswer;
+      }).length;
+      
+      // SPAM CRITERIA: 5 answers in < 60s with 3+ wrong
+      if (timeSpan < 60 && wrongCount >= 3) {
+        console.log('🚨 SPAM DETECTED!', { timeSpan, wrongCount });
+        const opponentId = Object.keys(game.players).find(id => id !== myId);
+        await update(ref(rtdb, `games/${roomId}`), {
+          winner: opponentId,
+          reason: 'spam_detected',
+          state: 'finished'
+        });
+      }
+    }
+  }, [roomId, myId, game]);
 
   // Kill trigger
   const handleTriggerKill = useCallback(() => {
-    if (animationType) return;
+    if (animationType || !roomId) return;
 
     let correctCount = 0;
     const questions = game?.questions || [];
@@ -166,36 +210,80 @@ export const useGameState = (roomId, user, navigate) => {
     const requiredCorrect = Math.ceil(totalQuestions / 3);
     const isBackfire = correctCount < requiredCorrect;
 
-    setAnimationType(isBackfire ? 'backfire' : 'kill');
-  }, [animationType, game?.questions, myAnswers]);
+    console.log('🎯 Kill triggered:', { correctCount, requiredCorrect, isBackfire });
 
-  // Animation complete handler
-  const onAnimationComplete = useCallback(() => {
-    if (!roomId) return;
-
-    const isKill = animationType === 'kill';
-    const winnerId = isKill ? myId : enemyId;
-    const reason = isKill ? 'kill' : 'backfire';
-
+    // Update Firebase with winner and reason
+    const winnerId = isBackfire ? enemyId : myId;
+    const reason = isBackfire ? 'backfire' : 'kill';
+    
     update(ref(rtdb, `games/${roomId}`), {
       winner: winnerId,
       reason: reason,
       state: 'finished'
     }).then(() => {
-      setAnimationType(null);
+      console.log('✅ Game updated in Firebase with winner:', winnerId);
+    }).catch(err => {
+      console.error('❌ Failed to update game:', err);
     });
-  }, [animationType, myId, enemyId, roomId]);
+  }, [animationType, game?.questions, myAnswers, roomId, myId, enemyId]);
 
-  // XP update logic (optimized)
-  const updateXP = useCallback((earnedXP, iWon) => {
-    if (hasUpdatedXP || !user?.uid) return;
+  // Animation complete handler
+  const onAnimationComplete = useCallback(() => {
+    console.log('🎬 Animation complete, clearing animation type');
+    setAnimationType(null);
+  }, []);
+
+  // ⭐ IMPROVED: Dynamic XP calculation based on performance
+  const updateXP = useCallback((iWon) => {
+    if (hasUpdatedXP || !user?.uid || !game?.questions || !myPlayer) return;
+
+    const questions = game.questions;
+    const myCorrectCount = questions.filter((q, idx) => myPlayer.answers?.[idx] === q.correctAnswer).length;
+    
+    // Dynamic XP formula
+    const baseXP = myCorrectCount * 10; // 10 XP per correct answer
+    const winBonus = iWon ? 100 : 0; // +100 for winning
+    const completionBonus = (Object.keys(myPlayer.answers || {}).length === questions.length) ? 50 : 0; // +50 for completing
+    const earnedXP = baseXP + winBonus + completionBonus;
+
+    console.log('💰 XP Calculation:', { myCorrectCount, baseXP, winBonus, completionBonus, total: earnedXP });
 
     setHasUpdatedXP(true);
     updateDoc(doc(db, "players", user.uid), {
       xp: increment(earnedXP),
-      wins: increment(iWon ? 1 : 0)
+      wins: increment(iWon ? 1 : 0),
+      matches: increment(1)
     }).catch(() => {});
-  }, [hasUpdatedXP, user?.uid]);
+  }, [hasUpdatedXP, user?.uid, game?.questions, myPlayer]);
+
+  // Trigger kill/backfire animation for both players when game ends
+  useEffect(() => {
+    if (!game?.winner || animationType || game.winner === 'DRAW' || animationShownRef.current) return;
+    
+    // If game ended due to kill, backfire, or spam, show animation
+    if (game.reason === 'kill' || game.reason === 'backfire' || game.reason === 'spam_detected') {
+      console.log('🎯 Triggering animation:', { winner: game.winner, reason: game.reason, myId });
+      
+      animationShownRef.current = true;
+      
+      const iWon = game.winner === myId;
+      const reason = game.reason;
+      
+      if (iWon) {
+        setAnimationType('kill'); // Victory
+      } else {
+        if (reason === 'kill') {
+          setAnimationType('victim'); // Defeated
+        } else {
+          setAnimationType('backfire'); // Weapon jammed or spam
+        }
+      }
+      
+      if (!iWon) {
+        setIsShot(true);
+      }
+    }
+  }, [game?.winner, game?.reason, animationType, myId]);
 
   return {
     // State

@@ -2,10 +2,8 @@ import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import gsap from 'gsap';
 import { Trophy, Home, CheckCircle, XCircle, AlertTriangle, Award, Target } from 'lucide-react';
-import victorySfx from '../assets/sounds/victory.mp3';
-import defeatSfx from '../assets/sounds/defeat.mp3';
 
-const GameResultOverlay = ({ result, myPlayer, enemyPlayer, questions, earnedXP, reason }) => {
+const GameResultOverlay = ({ result, myPlayer, enemyPlayer, questions, earnedXP, reason, myLocalAnswers, enemyLocalAnswers }) => {
   const navigate = useNavigate();
   const containerRef = useRef(null);
   const xpCounterRef = useRef(null);
@@ -13,10 +11,7 @@ const GameResultOverlay = ({ result, myPlayer, enemyPlayer, questions, earnedXP,
   const isDraw = result === 'draw';
 
   useEffect(() => {
-    // Play sound
-    const audio = new Audio(isVictory ? victorySfx : defeatSfx);
-    audio.volume = 0.5;
-    audio.play().catch(() => {});
+    console.log('🎊 Result overlay mounted:', { result, myPlayer: myPlayer?.name, enemyPlayer: enemyPlayer?.name });
 
     const ctx = gsap.context(() => {
       const tl = gsap.timeline();
@@ -29,85 +24,61 @@ const GameResultOverlay = ({ result, myPlayer, enemyPlayer, questions, earnedXP,
 
       // 2. Result title explosion
       tl.fromTo('.result-title',
-        { scale: 3, opacity: 0, rotateZ: -10 },
-        { 
-          scale: 1, 
-          opacity: 1, 
-          rotateZ: 0,
-          duration: 0.8,
-          ease: 'elastic.out(1, 0.5)'
-        },
+        { scale: 0, rotateY: 180, opacity: 0 },
+        { scale: 1, rotateY: 0, opacity: 1, duration: 0.8, ease: 'back.out(2)' }
+      );
+
+      // 3. Subtitle slide
+      tl.fromTo('.result-subtitle',
+        { y: 30, opacity: 0 },
+        { y: 0, opacity: 1, duration: 0.5, ease: 'power2.out' },
         '-=0.4'
       );
 
-      // 3. Screen shake for defeat
-      if (!isVictory && !isDraw) {
-        tl.to(containerRef.current, {
-          x: [-5, 5, -5, 5, 0],
-          y: [-3, 3, -3, 3, 0],
-          duration: 0.5,
-          ease: 'power2.inOut'
-        }, '-=0.5');
-      }
-
-      // 4. Subtitle fade in
-      tl.fromTo('.result-subtitle',
-        { y: -20, opacity: 0 },
-        { y: 0, opacity: 1, duration: 0.4 },
-        '-=0.3'
-      );
-
-      // 5. Stats container slide in
+      // 4. Stats container entrance
       tl.fromTo('.stats-container',
-        { y: 50, opacity: 0 },
-        { y: 0, opacity: 1, duration: 0.6, ease: 'power3.out' },
+        { y: 50, opacity: 0, scale: 0.9 },
+        { y: 0, opacity: 1, scale: 1, duration: 0.6, ease: 'back.out(1.5)' },
         '-=0.2'
       );
 
-      // 6. Question results stagger in
+      // 5. Question rows stagger
       tl.fromTo('.question-row',
         { x: -30, opacity: 0 },
-        { 
-          x: 0, 
-          opacity: 1, 
-          duration: 0.4,
-          stagger: 0.08,
-          ease: 'power2.out'
-        },
+        { x: 0, opacity: 1, duration: 0.3, stagger: 0.05, ease: 'power2.out' },
         '-=0.3'
       );
 
-      // 7. XP Badge popup
+      // 6. XP badge entrance
       tl.fromTo('.xp-badge',
-        { scale: 0, rotate: -180 },
-        { 
-          scale: 1, 
-          rotate: 0,
-          duration: 0.6,
-          ease: 'back.out(3)'
-        },
+        { scale: 0, rotation: -45 },
+        { scale: 1, rotation: 0, duration: 0.5, ease: 'back.out(2)' },
         '-=0.2'
       );
 
-      // 8. Animated XP counter
-      const xpCounter = { value: 0 };
-      tl.to(xpCounter, {
-        value: earnedXP,
+      // 7. Counter animation
+      tl.to(xpCounterRef.current, {
+        innerText: earnedXP,
         duration: 1,
-        ease: 'power2.out',
-        onUpdate: function() {
-          if (xpCounterRef.current) {
-            xpCounterRef.current.textContent = Math.floor(xpCounter.value);
-          }
-        }
-      }, '-=0.4');
+        snap: { innerText: 1 },
+        ease: 'power1.out'
+      }, '-=0.3');
 
-      // 9. Return button slide up
+      // 8. Return button entrance
       tl.fromTo('.return-button',
         { y: 30, opacity: 0 },
         { y: 0, opacity: 1, duration: 0.5, ease: 'power2.out' },
         '-=0.5'
       );
+
+      // 9. Final bounce
+      tl.to('.xp-badge', {
+        scale: 1.05,
+        duration: 0.2,
+        yoyo: true,
+        repeat: 1,
+        ease: 'power1.inOut'
+      });
 
       // 10. Victory confetti effect
       if (isVictory) {
@@ -125,9 +96,31 @@ const GameResultOverlay = ({ result, myPlayer, enemyPlayer, questions, earnedXP,
     return () => ctx.revert();
   }, [isVictory, isDraw, earnedXP]);
 
-  // Calculate stats
-  const myCorrect = questions.filter((q, idx) => myPlayer.answers?.[idx] === q.correctAnswer).length;
-  const enemyCorrect = questions.filter((q, idx) => enemyPlayer.answers?.[idx] === q.correctAnswer).length;
+  // Use local answers as primary source, Firebase as fallback
+  const myAnswers = myLocalAnswers || myPlayer?.answers || {};
+  const enemyAnswers = enemyLocalAnswers || enemyPlayer?.answers || {};
+
+  // Calculate stats - SAFE: Handle missing answers
+  const myCorrect = questions.filter((q, idx) => {
+    const myAns = myAnswers[idx];
+    return myAns && myAns === q.correctAnswer;
+  }).length;
+  
+  const enemyCorrect = questions.filter((q, idx) => {
+    const enAns = enemyAnswers[idx];
+    return enAns && enAns === q.correctAnswer;
+  }).length;
+
+  console.log('📊 Result overlay stats:', { 
+    result, 
+    myPlayer: myPlayer?.name, 
+    enemyPlayer: enemyPlayer?.name,
+    myAnswers,
+    enemyAnswers,
+    myCorrect,
+    enemyCorrect,
+    questionsCount: questions.length
+  });
 
   return (
     <div ref={containerRef} className="fixed inset-0 z-[100] flex flex-col items-center justify-center overflow-hidden">
@@ -137,8 +130,8 @@ const GameResultOverlay = ({ result, myPlayer, enemyPlayer, questions, earnedXP,
 
       {/* Background */}
       <div className="absolute inset-0 bg-[#0f1923]">
-        {/* Color Tint */}
-        <div className={`absolute inset-0 opacity-30 ${isVictory ? 'bg-green-900' : isDraw ? 'bg-yellow-900' : 'bg-red-900'}`}></div>
+        {/* Subtle Color Tint - reduced opacity */}
+        <div className={`absolute inset-0 opacity-10 ${isVictory ? 'bg-green-900' : isDraw ? 'bg-yellow-900' : 'bg-red-900'}`}></div>
 
         {/* Scanlines */}
         <div className="absolute inset-0 opacity-[0.05]" style={{
@@ -205,8 +198,8 @@ const GameResultOverlay = ({ result, myPlayer, enemyPlayer, questions, earnedXP,
           </p>
         </div>
 
-        {/* Stats Container */}
-        <div className="stats-container bg-[#1a2332]/90 backdrop-blur-sm border-2 border-red-500/30 p-6 md:p-8 mb-6 relative overflow-hidden">
+        {/* Stats Container with clip-path-notch */}
+        <div className="stats-container bg-[#0f1923] border border-white/10 p-6 md:p-8 mb-6 relative overflow-hidden clip-path-notch">
           {/* Top accent */}
           <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-red-500 to-transparent"></div>
 
@@ -214,7 +207,7 @@ const GameResultOverlay = ({ result, myPlayer, enemyPlayer, questions, earnedXP,
           <div className="grid grid-cols-3 gap-4 mb-6">
             {/* My stats */}
             <div className="text-center">
-              <div className="w-20 h-20 mx-auto mb-2 border-2 border-blue-500 overflow-hidden">
+              <div className="w-20 h-20 mx-auto mb-2 border-2 border-blue-500 overflow-hidden clip-path-notch">
                 {myPlayer?.avatar?.url ? (
                   <img src={myPlayer.avatar.url} alt="" className="w-full h-full object-cover" />
                 ) : (
@@ -229,14 +222,14 @@ const GameResultOverlay = ({ result, myPlayer, enemyPlayer, questions, earnedXP,
 
             {/* VS */}
             <div className="flex items-center justify-center">
-              <div className="w-16 h-16 bg-[#0f1923] border-2 border-red-500 flex items-center justify-center">
+              <div className="w-16 h-16 bg-[#0f1923] border-2 border-red-500 flex items-center justify-center clip-path-notch">
                 <span className="text-red-500 font-black text-xl">VS</span>
               </div>
             </div>
 
             {/* Enemy stats */}
             <div className="text-center">
-              <div className="w-20 h-20 mx-auto mb-2 border-2 border-red-500 overflow-hidden">
+              <div className="w-20 h-20 mx-auto mb-2 border-2 border-red-500 overflow-hidden clip-path-notch">
                 {enemyPlayer?.avatar?.url ? (
                   <img src={enemyPlayer.avatar.url} alt="" className="w-full h-full object-cover" />
                 ) : (
@@ -250,16 +243,16 @@ const GameResultOverlay = ({ result, myPlayer, enemyPlayer, questions, earnedXP,
             </div>
           </div>
 
-          {/* Question breakdown */}
+          {/* Question breakdown - ALWAYS SHOW for both victory and defeat */}
           <div className="space-y-2 max-h-48 overflow-y-auto scrollbar-thin scrollbar-thumb-red-500/30 scrollbar-track-transparent">
             {questions.map((q, idx) => {
-              const myAns = myPlayer.answers?.[idx];
-              const enAns = enemyPlayer.answers?.[idx];
+              const myAns = myAnswers[idx];
+              const enAns = enemyAnswers[idx];
               const isMyCorrect = myAns === q.correctAnswer;
               const isEnCorrect = enAns === q.correctAnswer;
 
               return (
-                <div key={idx} className="question-row grid grid-cols-3 gap-2 bg-black/20 p-2 border border-red-500/10">
+                <div key={idx} className="question-row grid grid-cols-3 gap-2 bg-black/20 p-2 border border-white/10">
                   <div className={`flex items-center gap-2 text-xs ${isMyCorrect ? 'text-green-400' : 'text-red-400'}`}>
                     {isMyCorrect ? <CheckCircle size={14} /> : <XCircle size={14} />}
                     <span className="truncate">{myAns || '-'}</span>

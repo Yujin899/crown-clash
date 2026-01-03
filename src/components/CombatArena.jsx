@@ -5,6 +5,7 @@ import { Shield, Zap, Crosshair, CheckCircle, Target } from 'lucide-react';
 import 'swiper/css';
 import 'swiper/css/effect-cards';
 import 'swiper/css/virtual';
+import flipSfx from '../assets/sounds/card_flip.mp3';
 
 const CombatArena = ({ 
     questions, 
@@ -16,6 +17,12 @@ const CombatArena = ({
 }) => {
   const swiperRef = useRef(null);
   const [activeIndex, setActiveIndex] = useState(0);
+  const flipAudioRef = useRef(null);
+
+  // Preload flip sound for better performance
+  useEffect(() => {
+    flipAudioRef.current = new Audio(flipSfx);
+  }, []);
 
   // OPTIMIZATION: Imperatively update Swiper lock state to prevent re-renders
   useEffect(() => {
@@ -33,6 +40,16 @@ const CombatArena = ({
     }
   }, [activeIndex, myAnswers, questions.length]);
 
+  // Handle slide change with sound
+  const handleSlideChange = (swiper) => {
+    setActiveIndex(swiper.activeIndex);
+    // Play flip sound when swiping
+    if (flipAudioRef.current) {
+      flipAudioRef.current.currentTime = 0; // Reset to start
+      flipAudioRef.current.play().catch(() => {});
+    }
+  };
+
   return (
     <div className={`absolute inset-0 flex items-center justify-center z-10 ${didShoot ? 'animate-recoil' : ''}`}>
         <div className="w-[300px] h-[520px] sm:w-[340px] sm:h-[560px] md:w-[420px] md:h-[640px] perspective-1000">
@@ -41,7 +58,7 @@ const CombatArena = ({
                     swiperRef.current = swiper;
                     swiper.allowSlideNext = false;
                 }}
-                onSlideChange={(swiper) => setActiveIndex(swiper.activeIndex)}
+                onSlideChange={handleSlideChange}
                 effect={'cards'} 
                 grabCursor={true} 
                 modules={[EffectCards, Virtual]} 
@@ -62,25 +79,25 @@ const CombatArena = ({
                 {questions.map((q, qIndex) => (
                 <SwiperSlide key={q.id || qIndex} virtualIndex={qIndex} className="bg-transparent will-change-transform">
                     {/* VALORANT CARD STYLE */}
-                    <div className="w-full h-full bg-[#1a2332] border border-white/10 relative overflow-hidden group clip-path-notch backface-hidden">
+                    <div className="w-full h-full bg-[#0f1923] border border-white/10 relative overflow-hidden group clip-path-notch backface-hidden">
                         
                         {/* Status Icon */}
                         {myAnswers[qIndex] && (
                             <div className="absolute top-0 right-0 p-4 z-20">
-                                <CheckCircle className="text-cyan-400 fill-cyan-400/20" size={28} />
+                                <CheckCircle className="text-red-500 fill-red-500/20" size={28} />
                             </div>
                         )}
                         
                         {/* Decorative background elements */}
-                        <div className="absolute top-0 left-0 w-2 h-16 bg-cyan-500"></div>
+                        <div className="absolute top-0 left-0 w-2 h-16 bg-red-500"></div>
                         <div className="absolute bottom-0 right-0 w-2 h-16 bg-white/20"></div>
                         <div className="absolute top-[10%] right-[10%] w-[80%] h-[1px] bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
                         
                         {/* Header */}
                         <div className="flex justify-between items-center px-6 py-6 border-b border-white/5 relative z-10">
                             <div className="flex items-center gap-2">
-                                <div className="w-2 h-2 bg-cyan-500 rotate-45"></div>
-                                <span className="text-xs font-bold tracking-[0.2em] text-cyan-400">TARGET_{qIndex + 1}</span>
+                                <div className="w-2 h-2 bg-red-500 rotate-45"></div>
+                                <span className="text-xs font-bold tracking-[0.2em] text-red-500">TARGET_{qIndex + 1}</span>
                             </div>
                             <div className="flex gap-1">
                                 {[...Array(3)].map((_, i) => (
@@ -106,7 +123,7 @@ const CombatArena = ({
                                         onClick={() => onAnswer(qIndex, opt)} 
                                         className={`w-full p-4 border transition-all duration-200 flex justify-between items-center group/btn relative overflow-hidden
                                             ${isSelected 
-                                                ? 'bg-cyan-500/20 border-cyan-500 text-white' 
+                                                ? 'bg-red-500/20 border-red-500 text-white' 
                                                 : 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/30 text-gray-400 hover:text-white'
                                             }
                                         `}
@@ -120,7 +137,7 @@ const CombatArena = ({
                                             {opt}
                                         </span>
                                         
-                                        {isSelected && <div className="w-2 h-2 bg-cyan-400 rotate-45 animate-pulse"></div>}
+                                        {isSelected && <div className="w-2 h-2 bg-red-500 rotate-45 animate-pulse"></div>}
                                     </button>
                                 );
                             })}

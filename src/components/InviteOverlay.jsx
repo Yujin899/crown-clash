@@ -1,12 +1,17 @@
 import { useEffect, useRef } from 'react';
 import gsap from 'gsap';
 import { Swords, Check, X, Clock, AlertTriangle } from 'lucide-react';
+import inviteSfx from '../assets/sounds/invite_notification.mp3';
 
 const InviteOverlay = ({ invite, onAccept, onDecline }) => {
   const containerRef = useRef(null);
   const timerBarRef = useRef(null);
 
   useEffect(() => {
+    // Play invite sound
+    const audio = new Audio(inviteSfx);
+    audio.play().catch(() => {});
+
     const ctx = gsap.context(() => {
       const tl = gsap.timeline();
 
@@ -126,43 +131,67 @@ const InviteOverlay = ({ invite, onAccept, onDecline }) => {
         }}></div>
         
         {/* Red vignette */}
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,rgba(239,68,68,0.1)_100%)]"></div>
-      </div>
+        <div className="main-card relative bg-gradient-to-br from-[#1a2332] to-[#0f1923] border-2 border-red-500 shadow-2xl max-w-md w-full mx-4 overflow-hidden clip-path-notch">
+          {/* Animated glow */}
+          <div className="absolute inset-0 bg-gradient-to-br from-red-500/20 to-transparent animate-pulse"></div>
+          
+          {/* Corner accents */}
+          <div className="corner-accent absolute top-0 left-0 w-8 h-8 border-l-4 border-t-4 border-red-500"></div>
+          <div className="corner-accent absolute top-0 right-0 w-8 h-8 border-r-4 border-t-4 border-red-500"></div>
+          <div className="corner-accent absolute bottom-0 left-0 w-8 h-8 border-l-4 border-b-4 border-red-500"></div>
+          <div className="corner-accent absolute bottom-0 right-0 w-8 h-8 border-r-4 border-b-4 border-red-500"></div>
 
-      {/* Main Card */}
-      <div className="main-card relative w-full max-w-3xl p-8 md:p-12 text-center">
-        
-        {/* Corner Brackets */}
-        <div className="corner-accent absolute top-0 left-0 w-16 h-16 border-l-4 border-t-4 border-red-500"></div>
-        <div className="corner-accent absolute top-0 right-0 w-16 h-16 border-r-4 border-t-4 border-red-500"></div>
-        <div className="corner-accent absolute bottom-0 left-0 w-16 h-16 border-l-4 border-b-4 border-red-500"></div>
-        <div className="corner-accent absolute bottom-0 right-0 w-16 h-16 border-r-4 border-b-4 border-red-500"></div>
-
-        {/* Warning Label */}
-        <div className="glitch-text inline-flex items-center gap-2 px-4 py-2 mb-4 bg-red-500/10 border-2 border-red-500/50">
-          <AlertTriangle size={16} className="text-red-500" />
-          <span className="text-[10px] text-red-500 font-bold tracking-[0.4em] uppercase">
-            INCOMING CHALLENGE
-          </span>
-        </div>
-
-        {/* VS Section */}
-        <div className="glitch-text flex flex-col items-center justify-center mb-8">
-          <div className="relative mb-6">
-            <div className="vs-icon w-24 h-24 md:w-32 md:h-32 border-4 border-red-500 flex items-center justify-center bg-[#1a2332] shadow-[0_0_50px_rgba(239,68,68,0.6)] relative">
-              <Swords size={48} className="text-red-500" />
-              
-              {/* Pulsing rings */}
-              <div className="absolute inset-0 border-2 border-red-500 animate-ping opacity-20"></div>
-              <div className="absolute inset-[-8px] border border-red-500/30"></div>
+          {/* Content */}
+          <div className="relative z-10 p-8">
+            {/* Header */}
+            <div className="header-section text-center mb-6">
+              <div className="flex items-center justify-center gap-3 mb-3">
+                <Swords className="icon-pulse text-red-500" size={40} />
+                <h2 className="text-3xl font-black uppercase tracking-wider text-red-500" style={{
+                  textShadow: '0 0 20px rgba(239, 68, 68, 0.6)'
+                }}>
+                  CHALLENGE
+                </h2>
+                <Swords className="icon-pulse text-red-500" size={40} />
+              </div>
+              <div className="challenge-bar h-1 bg-gradient-to-r from-transparent via-red-500 to-transparent"></div>
             </div>
-            
+
+            {/* Sender Info with Avatar */}
+            <div className="sender-info flex items-center justify-center gap-4 mb-6 p-4 bg-black/30 border border-red-500/30 clip-path-notch">
+              {invite?.fromAvatar?.url ? (
+                <img 
+                  src={invite.fromAvatar.url} 
+                  alt={invite.fromName || 'Player'}
+                  className="w-16 h-16 border-2 border-red-500 clip-path-notch object-cover"
+                />
+              ) : (
+                <div className="w-16 h-16 bg-red-500/20 border-2 border-red-500 clip-path-notch flex items-center justify-center">
+                  <Swords size={32} className="text-red-500" />
+                </div>
+              )}
+              <div className="text-left">
+                <p className="text-gray-400 text-xs uppercase tracking-wider mb-1">Challenger</p>
+                <p className="text-white font-bold text-xl">{invite?.fromName || 'Unknown Player'}</p>
+              </div>
+            </div>
+
+            {/* Challenge Details */}
+            <div className="detail-section space-y-3 mb-6">
+              <div className="bg-black/40 p-3 border-l-4 border-red-500">
+                <p className="text-gray-400 text-sm uppercase tracking-wider mb-1">Quiz</p>
+                <p className="text-white font-bold">{invite?.quizTitle || 'Unknown Quiz'}</p>
+              </div>
+              <div className="bg-black/40 p-3 border-l-4 border-yellow-500">
+                <p className="text-gray-400 text-sm uppercase tracking-wider mb-1">Subject</p>
+                <p className="text-white font-bold">{invite?.subjectName || 'Unknown Subject'}</p>
+              </div>
+            </div>
             <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-red-500 text-white text-xs font-black px-4 py-1 tracking-[0.3em]">
               VS
             </div>
           </div>
           
-          {/* Opponent Name */}
           <h1 className="text-4xl md:text-6xl lg:text-7xl font-black uppercase text-white mb-3 drop-shadow-[0_0_20px_rgba(255,255,255,0.3)]" style={{
             textShadow: '0 0 10px rgba(239,68,68,0.5)'
           }}>

@@ -1,8 +1,9 @@
 @import "tailwindcss";
 
-/* هنا بنعرف الألوان الـ Custom لو حابب، بنفس نظام الـ CSS Variables */
+/* Custom colors */
 @theme {
   --color-brand-blue: #60a5fa;
   --color-crown-gold: #fbbf24;
   --color-dark-bg: #0f172a;
+  --color-red-saturated: #ff1744; /* More saturated red */
 }

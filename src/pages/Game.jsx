@@ -14,7 +14,7 @@ import CombatArena from '../components/CombatArena';
 import KillAnimation from '../components/KillAnimation';
 
 // Sounds
-import inviteSfx from '../assets/sounds/invite_notification.mp3';
+import gameStartSfx from '../assets/sounds/game-start.mp3';
 import flipSfx from '../assets/sounds/card_flip.mp3';
 import { useEffect, useRef } from 'react';
 
@@ -47,16 +47,10 @@ const Game = () => {
   // Play entrance sound once
   useEffect(() => {
     if (!audioRef.current) {
-      audioRef.current = new Audio(inviteSfx);
+      audioRef.current = new Audio(gameStartSfx);
       audioRef.current.play().catch(() => {});
     }
   }, []);
-
-  // Enhanced answer handler with sound
-  const handleAnswerWithSound = (qIndex, option) => {
-    new Audio(flipSfx).play().catch(() => {});
-    handleAnswer(qIndex, option);
-  };
 
   // Loading state
   if (!game || !myPlayer || !enemyPlayer) {
@@ -75,6 +69,8 @@ const Game = () => {
     const iWon = game.winner === myId;
     const isDraw = game.winner === 'DRAW';
     const earnedXP = isDraw ? 20 : (iWon ? 150 : 20);
+    
+    console.log('📊 Showing result page:', { winner: game.winner, myId, iWon, isDraw });
     
     // Update XP once
     updateXP(earnedXP, iWon);
@@ -96,6 +92,8 @@ const Game = () => {
             questions={game.questions || []}
             earnedXP={earnedXP}
             reason={game.reason || 'normal'}
+            myLocalAnswers={myAnswers}
+            enemyLocalAnswers={game.players?.[enemyId]?.answers || {}}
           />
         </div>
       </>
@@ -157,7 +155,7 @@ const Game = () => {
         <CombatArena
           questions={game.questions || []}
           myAnswers={myAnswers}
-          onAnswer={handleAnswerWithSound}
+          onAnswer={handleAnswer}
           killMode={killMode}
           onKill={handleTriggerKill}
           didShoot={!!animationType}
