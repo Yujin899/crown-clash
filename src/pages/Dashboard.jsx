@@ -1,35 +1,45 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useMemo, memo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { signOut } from 'firebase/auth';
 import { 
     collection, getDocs, doc, query, where, 
-    updateDoc, arrayUnion, onSnapshot, addDoc, writeBatch, deleteDoc 
+    updateDoc, arrayUnion, onSnapshot 
 } from 'firebase/firestore'; 
-import { auth, db } from '../firebaseConfig';
+import { ref, push, onValue, set, remove, update as rtdbUpdate } from 'firebase/database';
+import { auth, db, rtdb } from '../firebaseConfig';
 import { logout } from '../store/slices/authSlice';
-import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { motion, AnimatePresence } from 'framer-motion';
+
+// Icons
+import { Swords, Users, User, Bell, LogOut, Trophy, Target, Shield, Search, UserPlus, CheckCircle, XCircle } from 'lucide-react';
+
+// Components
 import ChatSidebar from '../components/ChatSidebar';
 import InviteOverlay from '../components/InviteOverlay';
-// Icons
-import { Swords, LogOut, ShieldAlert, UserPlus, Search, Gamepad2, X, Check, BookOpen, Bell, Users } from 'lucide-react';
+import { SubjectModal } from '../components/dashboard';
 
 const Dashboard = () => {
   const { user } = useSelector((state) => state.auth);
   const dispatch = useDispatch();
   const navigate = useNavigate();
   
+  // Tab state
+  const [activeTab, setActiveTab] = useState('combat');
+  
   // Data
   const [subjects, setSubjects] = useState([]);
   const [userData, setUserData] = useState(null);
   
-  // States
+  // Community
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [allPlayers, setAllPlayers] = useState([]); 
   const [friendRequests, setFriendRequests] = useState([]);
-  const [activeInvite, setActiveInvite] = useState(null); // الدعوة النشطة (Full Screen)
+  
+  // Game
+  const [activeInvite, setActiveInvite] = useState(null);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
 
   // Modal
@@ -37,248 +47,681 @@ const Dashboard = () => {
   const [subjectQuizzes, setSubjectQuizzes] = useState([]);
   const [selectedQuiz, setSelectedQuiz] = useState(null);
 
+  // Close notification dropdown when clicking outside
+  useEffect(() => {
+    if (!isNotifOpen) return;
+    
+    const handleClickOutside = (e) => {
+      if (!e.target.closest('.notification-dropdown') && !e.target.closest('.notification-bell')) {
+        setIsNotifOpen(false);
+      }
+    };
+    
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [isNotifOpen]);
+
   useEffect(() => {
     if (!user?.uid) return;
 
-    // 1. Fetch Static Data
-    getDocs(collection(db, "subjects")).then(snap => setSubjects(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-    getDocs(collection(db, "players")).then(snap => setAllPlayers(snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(p => p.id !== user.uid)));
-
-    // 2. Listen to User Data
-    const unsubUser = onSnapshot(doc(db, "players", user.uid), (docSnap) => {
-        if (docSnap.exists()) {
-            const data = docSnap.data();
-            if (!data.isProfileComplete) { navigate('/setup'); return; }
-            setUserData(data);
+    // Fetch user data
+    const userDocRef = doc(db, 'players', user.uid);
+    const unsubUser = onSnapshot(userDocRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setUserData(data);
+        
+        if (!data.isProfileComplete) {
+          navigate('/setup');
         }
+      }
     });
 
-    // 3. Listen for Game Invites (PENDING ONLY)
-    // بنسمع للدعوات اللي مبعوتة ليا وحالتها لسه pending
-    const qInvites = query(
-        collection(db, "game_invites"), 
-        where("to", "==", user.uid), 
-        where("status", "==", "pending")
-    );
+    // Fetch subjects
+    getDocs(collection(db, 'subjects')).then((snapshot) => {
+      setSubjects(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+
+    // Fetch all players for search
+    getDocs(collection(db, 'players')).then((snapshot) => {
+      setAllPlayers(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+
+    return () => unsubUser();
+  }, [user?.uid, navigate]);
+
+  // Friend requests listener - using Realtime Database
+  useEffect(() => {
+    if (!user?.uid) return;
     
-    const unsubInvites = onSnapshot(qInvites, (snap) => {
-        if (!snap.empty) {
-            // ناخد أحدث دعوة ونعرضها
-            // (بنستخدم doc.id عشان هنحتاجه في التحديث)
-            const inviteData = { id: snap.docs[0].id, ...snap.docs[0].data() };
-            setActiveInvite(inviteData);
+    const requestsRef = ref(rtdb, `friendRequests/${user.uid}`);
+    const unsub = onValue(requestsRef, (snapshot) => {
+      const requests = [];
+      snapshot.forEach((childSnapshot) => {
+        const data = childSnapshot.val();
+        // Check if expired (30 minutes)
+        if (Date.now() - data.timestamp < 30 * 60 * 1000) {
+          requests.push({ id: childSnapshot.key, ...data });
         } else {
-            setActiveInvite(null);
+          // Auto-delete expired request
+          remove(ref(rtdb, `friendRequests/${user.uid}/${childSnapshot.key}`));
         }
+      });
+      setFriendRequests(requests);
     });
+    
+    return () => unsub();
+  }, [user?.uid]);
 
-    // 4. Listen Friend Requests
-    const qRequests = query(collection(db, "friend_requests"), where("to", "==", user.uid), where("status", "==", "pending"));
-    const unsubRequests = onSnapshot(qRequests, (snap) => {
-        setFriendRequests(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+  // Invite listener - using Realtime Database
+  useEffect(() => {
+    if (!user?.uid) return;
+    
+    const invitesRef = ref(rtdb, `gameInvites/${user.uid}`);
+    const unsub = onValue(invitesRef, (snapshot) => {
+      let latestInvite = null;
+      snapshot.forEach((childSnapshot) => {
+        const data = childSnapshot.val();
+        // Check if expired (30 minutes)
+        if (data.status === 'pending' && Date.now() - data.timestamp < 30 * 60 * 1000) {
+          latestInvite = { id: childSnapshot.key, ...data };
+        } else if (Date.now() - data.timestamp >= 30 * 60 * 1000) {
+          // Auto-delete expired invite
+          remove(ref(rtdb, `gameInvites/${user.uid}/${childSnapshot.key}`));
+        }
+      });
+      setActiveInvite(latestInvite);
     });
+    
+    return () => unsub();
+  }, [user?.uid]);
 
-    return () => { unsubUser(); unsubInvites(); unsubRequests(); };
-  }, [user, navigate]);
+  // Search players
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
+      return;
+    }
+    const filtered = allPlayers.filter(p => 
+      p.displayName?.toLowerCase().includes(searchQuery.toLowerCase()) && 
+      p.uid !== user.uid
+    ).slice(0, 5);
+    setSearchResults(filtered);
+  }, [searchQuery, allPlayers, user.uid]);
 
-
-  // --- Game Invite Logic (Valorant Style) ---
-  const handleAcceptInvite = async () => {
-      if (!activeInvite) return;
-      
-      // التعديل المهم: بنحدث الحالة لـ accepted
-      // ده هيخلي الراسل (في صفحة Lobby) يعرف إننا قبلنا ويدخل الجيم
-      await updateDoc(doc(db, "game_invites", activeInvite.id), {
-          status: 'accepted'
+  // --- Handlers ---
+  const handleAcceptInvite = useCallback(async () => {
+    if (!activeInvite) return;
+    
+    console.log('✅ Accepting invite:', activeInvite);
+    
+    // Update invite status in Realtime DB
+    await rtdbUpdate(ref(rtdb, `gameInvites/${user.uid}/${activeInvite.id}`), { status: 'accepted' });
+    // Also notify sender
+    await rtdbUpdate(ref(rtdb, `gameInvites/${activeInvite.from}/${activeInvite.id}`), { status: 'accepted' });
+    
+    // Update game to mark this player as connected
+    const gameId = activeInvite.gameId;
+    if (gameId) {
+      await rtdbUpdate(ref(rtdb, `games/${gameId}/players/${user.uid}`), {
+        name: user.displayName,
+        connected: true
       });
       
-      // وأنا كمان بدخل نفس الروم
-      navigate(`/game/${activeInvite.roomId}`);
-  };
+      // Transition game state from pending → starting (only update these fields!)
+      await rtdbUpdate(ref(rtdb, `games/${gameId}`), {
+        state: 'starting'
+        // REMOVED endTime here to prevent race conditions with useGameState logic
+      });
+      
+      // Navigate directly to the game
+      console.log('🎮 Joining game and starting countdown:', gameId);
+      navigate(`/game/${gameId}`);
+    } else {
+      toast.error('Invalid game invite');
+    }
+  }, [activeInvite, navigate, user?.uid, user?.displayName]);
 
-  const handleDeclineInvite = async () => {
-      if (!activeInvite) return;
-      // لو رفضت، بمسح الدعوة، فالراسل هيعرف إنها "Cancelled"
-      await deleteDoc(doc(db, "game_invites", activeInvite.id));
-      setActiveInvite(null);
-      toast("Challenge Declined", { icon: "🚫" });
-  };
+  const handleDeclineInvite = useCallback(async () => {
+    if (!activeInvite) return;
+    // Remove invite from both users
+    await remove(ref(rtdb, `gameInvites/${user.uid}/${activeInvite.id}`));
+    await remove(ref(rtdb, `gameInvites/${activeInvite.from}/${activeInvite.id}`));
+    setActiveInvite(null);
+  }, [activeInvite, user?.uid]);
 
+  const handleSearchChange = useCallback((e) => {
+    setSearchQuery(e.target.value);
+  }, []);
 
-  // --- Friend & Search Logic ---
-  const handleSearchChange = (e) => {
-      const query = e.target.value;
-      setSearchQuery(query);
-      if (query.length >= 3) {
-          setSearchResults(allPlayers.filter(p => p.displayName.toLowerCase().includes(query.toLowerCase())));
-      } else { setSearchResults([]); }
-  };
+  const sendFriendRequest = useCallback(async (targetPlayer) => {
+    try {
+      const requestId = push(ref(rtdb, `friendRequests/${targetPlayer.uid}`)).key;
+      const requestData = {
+        from: user.uid,
+        to: targetPlayer.uid,
+        fromName: userData?.displayName || user.displayName,
+        toName: targetPlayer.displayName,
+        status: 'pending',
+        timestamp: Date.now()
+      };
+      
+      await set(ref(rtdb, `friendRequests/${targetPlayer.uid}/${requestId}`), requestData);
+      toast.success(`REQUEST SENT TO ${targetPlayer.displayName.toUpperCase()}`);
+      setSearchQuery('');
+    } catch (error) {
+      console.error('Friend request error:', error);
+      toast.error('FAILED TO SEND REQUEST');
+    }
+  }, [user, userData]);
 
-  const sendFriendRequest = async (targetPlayer) => {
-      if (userData.friends && userData.friends.includes(targetPlayer.id)) return toast.error("Already allies!");
-      try {
-          await addDoc(collection(db, "friend_requests"), { 
-              from: user.uid, fromName: userData.displayName, fromAvatar: userData.avatar || null, 
-              to: targetPlayer.id, status: 'pending', timestamp: new Date() 
-          });
-          toast.success("Request Sent");
-          setSearchQuery(''); setSearchResults([]);
-      } catch (err) { toast.error("Failed"); }
-  };
+  const acceptFriendRequest = useCallback(async (request) => {
+    try {
+      // Update both players' friend lists in Firestore
+      await updateDoc(doc(db, 'players', user.uid), { friends: arrayUnion(request.from) });
+      await updateDoc(doc(db, 'players', request.from), { friends: arrayUnion(user.uid) });
+      
+      // Remove request from Realtime DB
+      await remove(ref(rtdb, `friendRequests/${user.uid}/${request.id}`));
+      
+      toast.success('FRIEND ADDED');
+    } catch (error) {
+      console.error('Accept friend error:', error);
+      toast.error('FAILED TO ACCEPT');
+    }
+  }, [user.uid]);
 
-  const acceptFriendRequest = async (request) => {
-      try {
-          const batch = writeBatch(db);
-          batch.update(doc(db, "players", user.uid), { friends: arrayUnion(request.from) });
-          batch.update(doc(db, "players", request.from), { friends: arrayUnion(user.uid) });
-          batch.update(doc(db, "friend_requests", request.id), { status: 'accepted' });
-          await batch.commit();
-          toast.success("Ally Recruited!");
-      } catch (err) { toast.error("Error"); }
-  };
+  const handleSubjectClick = useCallback(async (subject) => {
+    console.log('🎯 Subject clicked:', subject);
+    setSelectedSubject(subject); 
+    setSelectedQuiz(null);
+    
+    // Query from SUBCOLLECTION instead of top-level
+    const quizzesRef = collection(db, `subjects/${subject.id}/quizzes`);
+    console.log('📚 Querying quizzes from:', `subjects/${subject.id}/quizzes`);
+    const snap = await getDocs(quizzesRef);
+    const quizzes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    console.log('📝 Found quizzes:', quizzes);
+    setSubjectQuizzes(quizzes);
+    
+    // Auto-select first quiz if available
+    if (quizzes.length > 0) {
+      console.log('✅ Auto-selecting first quiz:', quizzes[0]);
+      setSelectedQuiz(quizzes[0]);
+    } else {
+      console.warn('⚠️ No quizzes found for subject:', subject.id);
+    }
+  }, []);
 
+  const handleModeSelection = useCallback((mode) => {
+    console.log('🎮 Mode selected:', mode);
+    console.log('📊 Current state:', { selectedQuiz, selectedSubject });
+    
+    if (!selectedQuiz || !selectedQuiz.id) {
+      toast.error('PLEASE SELECT A QUIZ FIRST');
+      console.error('❌ Missing quiz data:', { selectedQuiz, selectedSubject });
+      return;
+    }
+    
+    // Pass data via URL params for persistence across refreshes
+    const params = new URLSearchParams({
+      mode,
+      quizId: selectedQuiz.id,
+      subjectId: selectedSubject.id,
+      quizTitle: selectedQuiz.title,
+      subjectName: selectedSubject.name
+    });
+    
+    console.log('🚀 Navigating to lobby with params:', params.toString());
+    navigate(`/lobby?${params.toString()}`);
+  }, [selectedQuiz, selectedSubject, navigate]);
 
-  // --- Navigation & Modal Logic ---
-  const handleSubjectClick = async (subject) => {
-      setSelectedSubject(subject); setSelectedQuiz(null);
-      const q = query(collection(db, "quizzes"), where("subjectId", "==", subject.id));
-      const snap = await getDocs(q);
-      setSubjectQuizzes(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-  };
+  const handleLogout = useCallback(async () => { 
+    await signOut(auth); 
+    dispatch(logout()); 
+  }, [dispatch]);
 
-  const handleModeSelection = (mode) => {
-      navigate('/lobby', { state: { mode, quizId: selectedQuiz.id, subjectName: selectedSubject.name, quizTitle: selectedQuiz.title } });
-  };
-  const handleLogout = async () => { await signOut(auth); dispatch(logout()); };
+  const hasNotifications = useMemo(() => friendRequests.length > 0, [friendRequests.length]);
 
+  // Tabs configuration
+  const tabs = [
+    { id: 'combat', label: 'COMBAT', icon: Swords },
+    { id: 'community', label: 'COMMUNITY', icon: Users },
+    { id: 'profile', label: 'PROFILE', icon: User }
+  ];
 
   return (
-    <div className="p-6 md:p-10 min-h-screen max-w-7xl mx-auto pb-20 relative">
-      <ChatSidebar />
-
-      {/* === INVITE OVERLAY (VALORANT STYLE) === */}
-      <AnimatePresence>
-          {activeInvite && (
-              <InviteOverlay 
-                  invite={activeInvite} 
-                  onAccept={handleAcceptInvite} 
-                  onDecline={handleDeclineInvite} 
-              />
-          )}
-      </AnimatePresence>
-
+    <div className="min-h-screen p-4 md:p-6 lg:p-8 max-w-7xl mx-auto pb-20 relative">
+      
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-center mb-10 gap-4 relative z-10">
+      <motion.div 
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6 md:mb-8"
+      >
+        {/* User Info */}
         <div className="flex items-center gap-4">
-           {userData?.avatar && (
-             <div className="w-16 h-20 bg-white rounded-lg p-1 relative shadow-lg transform -rotate-6 border-2 border-indigo-500">
-                <div className={`w-full h-full rounded bg-gradient-to-br ${userData.avatar.color} flex items-center justify-center text-2xl`}>{userData.avatar.icon}</div>
-             </div>
-           )}
-           <div>
-              <h1 className="text-3xl font-black uppercase italic text-white">Command <span className="text-indigo-500">Center</span></h1>
-              <p className="text-gray-500 tracking-widest text-xs mt-1 uppercase flex items-center gap-2">OPERATOR: <span className="text-white font-bold">{userData?.displayName}</span></p>
-           </div>
-        </div>
-        
-        <div className="flex items-center gap-3">
-            {/* Notification Center */}
-            <div className="relative">
-                <button onClick={() => setIsNotifOpen(!isNotifOpen)} className="relative p-2 bg-white/5 rounded-lg hover:bg-white/10 transition-colors">
-                    <Bell size={20} className={friendRequests.length > 0 ? "text-indigo-400 animate-pulse" : "text-gray-400"} />
-                    {friendRequests.length > 0 && <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full"></span>}
-                </button>
-                <AnimatePresence>
-                    {isNotifOpen && (
-                        <motion.div initial={{ opacity: 0, y: 10, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 10, scale: 0.95 }} className="absolute right-0 top-12 w-80 bg-[#0f172a] border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden">
-                            <div className="p-3 border-b border-white/5 bg-indigo-900/20 text-xs font-bold text-white">NOTIFICATIONS</div>
-                            <div className="max-h-60 overflow-y-auto">
-                                {friendRequests.length > 0 ? friendRequests.map(req => (
-                                    <div key={req.id} className="p-3 border-b border-white/5 flex items-center justify-between hover:bg-white/5">
-                                        <div className="flex items-center gap-2"><span className="text-lg">{req.fromAvatar?.icon || "👤"}</span><div><p className="text-xs text-white font-bold">{req.fromName}</p><p className="text-[10px] text-gray-500">Wants to be allies</p></div></div>
-                                        <button onClick={() => acceptFriendRequest(req)} className="bg-green-600 p-1.5 rounded hover:bg-green-500"><Check size={12} className="text-white"/></button>
-                                    </div>
-                                )) : <div className="p-6 text-center text-[10px] text-gray-500">No new alerts</div>}
-                            </div>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
+          {userData?.avatar?.url && (
+            <div className="relative w-16 h-16 md:w-20 md:h-20 border-2 border-red-500 overflow-hidden">
+              <img src={userData.avatar.url} alt="Avatar" className="w-full h-full object-cover" />
+              <div className="absolute top-0 left-0 w-2 h-2 border-l-2 border-t-2 border-red-500"></div>
+              <div className="absolute bottom-0 right-0 w-2 h-2 border-r-2 border-b-2 border-red-500"></div>
             </div>
-            {userData?.isAdmin && <button onClick={() => navigate('/admin')} className="flex items-center gap-2 text-xs text-indigo-400 font-bold border border-indigo-500/20 px-4 py-2 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 transition-all"><ShieldAlert size={14} /> ADMIN</button>}
-            <button onClick={handleLogout} className="flex items-center gap-2 text-xs text-red-500 font-bold border border-red-500/20 px-4 py-2 rounded-lg hover:bg-red-500/10 transition-all"><LogOut size={14} /> LOGOUT</button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        {/* ACTIVE ARENAS */}
-        <div className="lg:col-span-2 space-y-6">
-          <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2"><BookOpen size={20} className="text-indigo-500"/> Active Arenas</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {subjects.map((sub) => (
-                <motion.div key={sub.id} onClick={() => handleSubjectClick(sub)} whileHover={{ scale: 1.02 }} className="bg-[#0b0f1a] border border-white/5 p-6 rounded-2xl hover:border-indigo-500/50 hover:bg-indigo-900/10 transition-all cursor-pointer relative overflow-hidden group">
-                    <div className="absolute right-0 top-0 w-24 h-24 bg-indigo-500/5 rounded-bl-full pointer-events-none group-hover:bg-indigo-500/10"></div>
-                    <h3 className="font-bold text-lg mb-1 text-white">{sub.name}</h3>
-                    {sub.quizCount > 0 && <p className="text-[10px] text-gray-500 tracking-widest uppercase flex items-center gap-1"><Gamepad2 size={10} /> {sub.quizCount} Modules</p>}
-                </motion.div>
-                ))}
+          )}
+          <div>
+            <h1 className="text-2xl md:text-3xl font-black uppercase tracking-tight text-white">
+              {userData?.displayName || user?.displayName}
+            </h1>
+            <p className="text-red-500 text-xs font-bold uppercase tracking-wider">
+              {userData?.avatar?.role || 'AGENT'}
+            </p>
           </div>
         </div>
 
-        {/* RECRUIT ALLIES */}
-        <div className="space-y-6">
-           <div className="bg-[#0b0f1a] border border-white/5 p-6 rounded-3xl">
-              <h3 className="text-xs font-bold text-gray-500 tracking-widest mb-4 flex items-center gap-2"><Search size={14} /> RECRUIT ALLIES</h3>
-              <div className="relative"><input value={searchQuery} onChange={handleSearchChange} placeholder="Search name (3+ chars)..." className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-indigo-500 pl-8" /><Search className="absolute left-2 top-2.5 text-gray-500" size={14} /></div>
-              <AnimatePresence>
-                {searchResults.length > 0 && (
-                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="mt-2 bg-black/50 rounded-lg overflow-hidden border border-white/10">
-                        {searchResults.map(p => (
-                            <div key={p.id} className="flex justify-between items-center p-2 hover:bg-white/5 transition-colors"><span className="text-xs text-gray-300">{p.displayName}</span><button onClick={() => sendFriendRequest(p)} className="text-green-400 hover:text-green-300"><UserPlus size={14} /></button></div>
-                        ))}
-                    </motion.div>
-                )}
-              </AnimatePresence>
-           </div>
-        </div>
-      </div>
+        {/* Top Actions */}
+        <div className="flex items-center gap-3">
+          {/* Notification Bell */}
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setIsNotifOpen(!isNotifOpen)}
+            className="notification-bell relative p-3 bg-[#1a2332] border border-red-500/30 hover:border-red-500 transition-all"
+          >
+            <Bell size={20} className="text-red-500" />
+            {hasNotifications && (
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center"
+              >
+                <span className="text-[10px] font-bold text-white">{friendRequests.length}</span>
+              </motion.div>
+            )}
+          </motion.button>
 
-      {/* MODAL */}
+          {/* Logout */}
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={handleLogout}
+            className="p-3 bg-[#1a2332] border border-red-500/30 hover:border-red-500 hover:bg-red-500/10 transition-all"
+          >
+            <LogOut size={20} className="text-red-500" />
+          </motion.button>
+
+          {/* Admin Panel (only for admins) */}
+          {userData?.isAdmin === true && (
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => navigate('/admin')}
+              className="p-3 bg-red-500 hover:bg-red-600 transition-all"
+              title="Admin Panel"
+            >
+              <Shield size={20} className="text-white" />
+            </motion.button>
+          )}
+        </div>
+      </motion.div>
+
+      {/* Notification Dropdown */}
       <AnimatePresence>
-        {selectedSubject && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-                <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }} className="bg-[#0f172a] border border-indigo-500/30 w-full max-w-2xl rounded-3xl overflow-hidden shadow-2xl relative">
-                    <div className="p-6 border-b border-white/10 flex justify-between items-center bg-indigo-900/20">
-                        <div><h2 className="text-2xl font-black italic text-white uppercase">{selectedSubject.name}</h2><p className="text-xs text-indigo-300 tracking-widest">SELECT OPERATION MODULE</p></div>
-                        <button onClick={() => setSelectedSubject(null)} className="text-gray-400 hover:text-white"><X size={24} /></button>
+        {isNotifOpen && friendRequests.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="notification-dropdown absolute top-24 right-4 md:right-8 z-50 w-80 max-w-[calc(100vw-2rem)] bg-[#1a2332] border-2 border-red-500/30 shadow-2xl"
+          >
+            <div className="p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-white font-bold uppercase text-sm flex items-center gap-2">
+                  <Bell size={16} className="text-red-500" />
+                  FRIEND REQUESTS
+                </h3>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsNotifOpen(false);
+                  }}
+                  className="text-gray-500 hover:text-red-500 transition-colors"
+                >
+                  <XCircle size={18} />
+                </button>
+              </div>
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {friendRequests.map((req) => (
+                  <div key={req.id} className="bg-black/30 p-3 border border-red-500/20 relative">
+                    <p className="text-white text-sm font-semibold mb-2 uppercase">{req.fromName}</p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          acceptFriendRequest(req);
+                          if (friendRequests.length === 1) setIsNotifOpen(false);
+                        }}
+                        className="flex-1 bg-red-500 hover:bg-red-600 text-white text-xs font-bold py-2 px-3 uppercase transition-all"
+                      >
+                        <CheckCircle size={14} className="inline mr-1" />
+                        Accept
+                      </button>
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          await remove(ref(rtdb, `friendRequests/${user.uid}/${req.id}`));
+                          if (friendRequests.length === 1) setIsNotifOpen(false);
+                        }}
+                        className="flex-1 bg-transparent border border-red-500/50 hover:bg-red-500/10 text-red-500 text-xs font-bold py-2 px-3 uppercase transition-all"
+                      >
+                        <XCircle size={14} className="inline mr-1" />
+                        Decline
+                      </button>
                     </div>
-                    <div className="p-6 min-h-[300px]">
-                        {!selectedQuiz ? (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {subjectQuizzes.length > 0 ? subjectQuizzes.map(quiz => (
-                                    <div key={quiz.id} onClick={() => setSelectedQuiz(quiz)} className="bg-black/20 hover:bg-indigo-600/20 border border-white/10 hover:border-indigo-500/50 p-4 rounded-xl cursor-pointer transition-all group flex items-center gap-3">
-                                        <div className="bg-white/5 p-2 rounded-lg group-hover:bg-indigo-500 group-hover:text-white transition-colors"><Gamepad2 size={20}/></div>
-                                        <h4 className="font-bold text-white group-hover:text-indigo-300 transition-colors">{quiz.title}</h4>
-                                    </div>
-                                )) : <p className="col-span-full text-center text-gray-500 py-10 flex flex-col items-center gap-2"><ShieldAlert size={40} /> No modules deployed yet.</p>}
-                            </div>
-                        ) : (
-                            <div className="flex flex-col items-center justify-center h-full gap-6 text-center">
-                                <h3 className="text-xl font-bold text-white">Target: <span className="text-indigo-400">{selectedQuiz.title}</span></h3>
-                                <div className="flex gap-4 w-full justify-center">
-                                    <button onClick={() => handleModeSelection('random')} className="flex-1 max-w-[200px] bg-gradient-to-br from-purple-600 to-indigo-600 p-6 rounded-2xl hover:scale-105 transition-transform flex flex-col items-center gap-2"><Swords size={32} /><div className="font-bold text-sm uppercase">Random Opponent</div></button>
-                                    <button onClick={() => handleModeSelection('friend')} className="flex-1 max-w-[200px] bg-gradient-to-br from-green-600 to-emerald-600 p-6 rounded-2xl hover:scale-105 transition-transform flex flex-col items-center gap-2"><Users size={32} /><div className="font-bold text-sm uppercase">Challenge Friend</div></button>
-                                </div>
-                                <button onClick={() => setSelectedQuiz(null)} className="text-xs text-gray-500 hover:text-white mt-4 flex items-center gap-1"><X size={12}/> Cancel</button>
-                            </div>
-                        )}
-                    </div>
-                </motion.div>
-            </motion.div>
+                    {/* Corner accents */}
+                    <div className="absolute top-0 left-0 w-2 h-2 border-l border-t border-red-500/50"></div>
+                    <div className="absolute bottom-0 right-0 w-2 h-2 border-r border-b border-red-500/50"></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Tab Navigation */}
+      <div className="flex gap-2 mb-6 border-b border-red-500/20">
+        {tabs.map((tab) => {
+          const Icon = tab.icon;
+          return (
+            <motion.button
+              key={tab.id}
+              whileHover={{ y: -2 }}
+              onClick={() => setActiveTab(tab.id)}
+              className={`
+                relative flex items-center gap-2 px-6 py-3 font-bold uppercase text-sm tracking-wider transition-all
+                ${activeTab === tab.id 
+                  ? 'text-red-500 bg-red-500/10' 
+                  : 'text-gray-500 hover:text-white'
+                }
+              `}
+            >
+              <Icon size={18} />
+              <span className="hidden md:inline">{tab.label}</span>
+              {activeTab === tab.id && (
+                <motion.div
+                  layoutId="activeTab"
+                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-red-500"
+                />
+              )}
+            </motion.button>
+          );
+        })}
+      </div>
+
+      {/* Tab Content */}
+      <motion.div
+        key={activeTab}
+        initial={{ opacity: 0, x: 20 }}
+        animate={{ opacity: 1, x: 0 }}
+        exit={{ opacity: 0, x: -20 }}
+        transition={{ duration: 0.3 }}
+      >
+        {activeTab === 'combat' && (
+          <CombatTab 
+            subjects={subjects}
+            onSubjectClick={handleSubjectClick}
+            userData={userData}
+          />
+        )}
+
+        {activeTab === 'community' && (
+          <CommunityTab
+            searchQuery={searchQuery}
+            onSearchChange={handleSearchChange}
+            searchResults={searchResults}
+            onSendRequest={sendFriendRequest}
+            userData={userData}
+            allPlayers={allPlayers}
+          />
+        )}
+
+        {activeTab === 'profile' && (
+          <ProfileTab userData={userData} user={user} />
+        )}
+      </motion.div>
+
+      {/* Modals & Overlays */}
+      {selectedSubject && (
+        <SubjectModal
+          selectedSubject={selectedSubject}
+          onClose={() => setSelectedSubject(null)}
+          subjectQuizzes={subjectQuizzes}
+          selectedQuiz={selectedQuiz}
+          onQuizSelect={setSelectedQuiz}
+          onModeSelection={handleModeSelection}
+        />
+      )}
+
+      {activeInvite && (
+        <InviteOverlay
+          invite={activeInvite}
+          onAccept={handleAcceptInvite}
+          onDecline={handleDeclineInvite}
+        />
+      )}
+
+      <ChatSidebar />
     </div>
   );
 };
 
-export default Dashboard;
+// Combat Tab Component
+const CombatTab = memo(({ subjects, onSubjectClick, userData }) => (
+  <div className="space-y-6">
+    {/* Stats Row */}
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+      <StatCard icon={Trophy} label="WINS" value={userData?.wins || 0} color="red" />
+      <StatCard icon={Target} label="MATCHES" value={userData?.matchesPlayed || 0} color="red" />
+      <StatCard icon={Shield} label="XP" value={userData?.xp || 0} color="red" />
+      <StatCard icon={Swords} label="RANK" value={userData?.rank || 'UNRANKED'} color="red" isText />
+    </div>
+
+    {/* Subjects Grid */}
+    <div>
+      <h2 className="text-white font-black uppercase text-lg mb-4 flex items-center gap-2">
+        <Swords size={20} className="text-red-500" />
+        SELECT BATTLEFIELD
+      </h2>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {subjects.map((subject) => (
+          <motion.div
+            key={subject.id}
+            whileHover={{ scale: 1.02, y: -2 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => onSubjectClick(subject)}
+            className="group relative bg-[#1a2332]/70 backdrop-blur-sm border border-red-500/30 hover:border-red-500 p-6 cursor-pointer transition-all overflow-hidden"
+          >
+            {/* Hover effect */}
+            <div className="absolute inset-0 bg-red-500/0 group-hover:bg-red-500/5 transition-all"></div>
+            
+            <div className="relative z-10">
+              <h3 className="text-white font-black text-xl uppercase mb-2">{subject.name}</h3>
+              <p className="text-gray-400 text-sm mb-4">{subject.description}</p>
+              <div className="flex items-center gap-2 text-red-500 text-xs font-bold uppercase">
+                <Swords size={14} />
+                ENGAGE
+              </div>
+            </div>
+
+            {/* Corner accents */}
+            <div className="absolute top-0 left-0 w-4 h-4 border-l-2 border-t-2 border-red-500/50"></div>
+            <div className="absolute bottom-0 right-0 w-4 h-4 border-r-2 border-b-2 border-red-500/50"></div>
+          </motion.div>
+        ))}
+      </div>
+    </div>
+  </div>
+));
+
+// Community Tab Component
+const CommunityTab = memo(({ searchQuery, onSearchChange, searchResults, onSendRequest, userData, allPlayers }) => {
+  const friends = useMemo(() => {
+    if (!userData?.friends) return [];
+    return allPlayers.filter(p => userData.friends.includes(p.uid));
+  }, [userData?.friends, allPlayers]);
+
+  return (
+    <div className="space-y-6">
+      {/* Search Section */}
+      <div>
+        <h2 className="text-white font-black uppercase text-lg mb-4 flex items-center gap-2">
+          <UserPlus size={20} className="text-red-500" />
+          RECRUIT AGENTS
+        </h2>
+        <div className="relative">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={20} />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={onSearchChange}
+            placeholder="SEARCH BY CODENAME..."
+            className="w-full bg-[#1a2332] border border-red-500/30 focus:border-red-500 pl-12 pr-4 py-4 text-white outline-none transition-all uppercase placeholder:text-gray-600 text-sm font-semibold"
+          />
+        </div>
+        
+        {searchResults.length > 0 && (
+          <div className="mt-3 space-y-2">
+            {searchResults.map((player) => (
+              <div key={player.uid} className="bg-[#1a2332]/70 border border-red-500/20 p-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  {player.avatar?.url && (
+                    <div className="w-10 h-10 border border-red-500/30 overflow-hidden">
+                      <img src={player.avatar.url} alt="" className="w-full h-full object-cover" />
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-white font-bold text-sm">{player.displayName}</p>
+                    <p className="text-red-500 text-xs uppercase">{player.avatar?.role || 'Agent'}</p>
+                  </div>
+                </div>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => onSendRequest(player)}
+                  className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 text-xs font-bold uppercase"
+                >
+                  <UserPlus size={14} className="inline mr-1" />
+                  ADD
+                </motion.button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Friends List */}
+      <div>
+        <h2 className="text-white font-black uppercase text-lg mb-4 flex items-center gap-2">
+          <Users size={20} className="text-red-500" />
+          YOUR SQUAD ({friends.length})
+        </h2>
+        {friends.length === 0 ? (
+          <div className="bg-[#1a2332]/50 border border-red-500/20 p-8 text-center">
+            <Users size={48} className="text-gray-600 mx-auto mb-3" />
+            <p className="text-gray-500 text-sm uppercase">NO ALLIES YET</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {friends.map((friend) => (
+              <div key={friend.uid} className="bg-[#1a2332]/70 border border-red-500/20 p-4 flex items-center gap-3">
+                {friend.avatar?.url && (
+                  <div className="w-12 h-12 border border-red-500/30 overflow-hidden">
+                    <img src={friend.avatar.url} alt="" className="w-full h-full object-cover" />
+                  </div>
+                )}
+                <div>
+                  <p className="text-white font-bold text-sm">{friend.displayName}</p>
+                  <p className="text-red-500 text-xs uppercase">{friend.avatar?.role || 'Agent'}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+});
+
+// Profile Tab Component
+const ProfileTab = memo(({ userData, user }) => (
+  <div className="max-w-2xl mx-auto space-y-6">
+    {/* Profile Card */}
+    <div className="bg-[#1a2332]/70 border border-red-500/30 p-6 md:p-8 relative overflow-hidden">
+      <div className="flex flex-col md:flex-row items-center md:items-start gap-6">
+        {userData?.avatar?.url && (
+          <div className="relative">
+            <div className="w-32 h-32 border-2 border-red-500 overflow-hidden">
+              <img src={userData.avatar.url} alt="Avatar" className="w-full h-full object-cover" />
+            </div>
+            <div className="absolute -top-1 -left-1 w-4 h-4 border-l-2 border-t-2 border-red-500"></div>
+            <div className="absolute -bottom-1 -right-1 w-4 h-4 border-r-2 border-b-2 border-red-500"></div>
+          </div>
+        )}
+        <div className="flex-1 text-center md:text-left">
+          <div className="inline-block px-3 py-1 mb-2 bg-red-500/10 border border-red-500/30">
+            <span className="text-[10px] text-red-500 font-bold tracking-[0.2em]">
+              {userData?.avatar?.role || 'AGENT'}
+            </span>
+          </div>
+          <h2 className="text-3xl font-black uppercase text-white mb-2">{userData?.displayName || user?.displayName}</h2>
+          <p className="text-gray-400 text-sm mb-4">{user?.email}</p>
+          <div className="flex flex-wrap gap-3 justify-center md:justify-start">
+            <div className="bg-black/30 px-4 py-2 border border-red-500/20">
+              <p className="text-red-500 text-xs font-bold">RANK</p>
+              <p className="text-white text-lg font-black">{userData?.rank || 'UNRANKED'}</p>
+            </div>
+            <div className="bg-black/30 px-4 py-2 border border-red-500/20">
+              <p className="text-red-500 text-xs font-bold">TOTAL XP</p>
+              <p className="text-white text-lg font-black">{userData?.xp || 0}</p>
+            </div>
+            <div className="bg-black/30 px-4 py-2 border border-red-500/20">
+              <p className="text-red-500 text-xs font-bold">W/L</p>
+              <p className="text-white text-lg font-black">{userData?.wins || 0}/{(userData?.matchesPlayed || 0) - (userData?.wins || 0)}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-red-500 to-transparent"></div>
+    </div>
+
+    {/* Stats Grid */}
+    <div className="grid grid-cols-2 gap-4">
+      <div className="bg-[#1a2332]/70 border border-red-500/20 p-6 text-center">
+        <Trophy size={32} className="text-red-500 mx-auto mb-2" />
+        <p className="text-3xl font-black text-white mb-1">{userData?.wins || 0}</p>
+        <p className="text-red-500 text-xs font-bold uppercase">Victories</p>
+      </div>
+      <div className="bg-[#1a2332]/70 border border-red-500/20 p-6 text-center">
+        <Target size={32} className="text-red-500 mx-auto mb-2" />
+        <p className="text-3xl font-black text-white mb-1">{userData?.matchesPlayed || 0}</p>
+        <p className="text-red-500 text-xs font-bold uppercase">Battles</p>
+      </div>
+    </div>
+  </div>
+));
+
+// Stat Card Component
+const StatCard = ({ icon: Icon, label, value, color, isText = false }) => (
+  <motion.div
+    whileHover={{ y: -2 }}
+    className="bg-[#1a2332]/70 border border-red-500/20 p-4 relative overflow-hidden group"
+  >
+    <div className="absolute inset-0 bg-red-500/0 group-hover:bg-red-500/5 transition-all"></div>
+    <div className="relative z-10">
+      <Icon size={24} className="text-red-500 mb-2" />
+      <p className={`${isText ? 'text-lg' : 'text-2xl'} font-black text-white mb-1`}>{value}</p>
+      <p className="text-red-500 text-[10px] font-bold uppercase tracking-wider">{label}</p>
+    </div>
+  </motion.div>
+);
+
+export default memo(Dashboard);

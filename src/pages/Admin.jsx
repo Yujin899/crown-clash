@@ -1,417 +1,1316 @@
 import { useState, useEffect, useRef } from 'react';
-import { collection, addDoc, getDocs, writeBatch, doc, query, where, updateDoc, deleteDoc, increment } from 'firebase/firestore';
+import { useSelector } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
+import { 
+  collection, getDocs, doc, getDoc, setDoc, deleteDoc, updateDoc, 
+  addDoc, query, where, writeBatch
+} from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 import toast from 'react-hot-toast';
-import gsap from 'gsap';
-import { Loader2, Upload, FileJson, CheckCircle, Save, X, Edit, Trash2, LayoutGrid, FileText } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { 
+  BookOpen, Users, Settings, BarChart3, Plus, Edit, Trash2, 
+  Search, Download, Upload, Shield, Home, X, Save, ChevronRight,
+  User as UserIcon, TrendingUp, ChevronLeft, FileJson, Loader
+} from 'lucide-react';
 
 const Admin = () => {
-  const [activeTab, setActiveTab] = useState('subject');
-  const [loading, setLoading] = useState(false);
+  const { user } = useSelector(state => state.auth);
+  const navigate = useNavigate();
   
-  // Upload Progress State
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [isUploading, setIsUploading] = useState(false);
+  const [activeTab, setActiveTab] = useState('subjects');
+  const [isLoading, setIsLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
 
-  // Lists Data
-  const [subjects, setSubjects] = useState([]);
-  const [quizzes, setQuizzes] = useState([]);
-  const [questions, setQuestions] = useState([]);
+  // Navigation state
+  const [selectedSubject, setSelectedSubject] = useState(null);
+  const [selectedQuiz, setSelectedQuiz] = useState(null);
 
-  // Edit State
-  const [editingId, setEditingId] = useState(null);
-
-  // Form States
-  const [subjectName, setSubjectName] = useState('');
-  const [quizTitle, setQuizTitle] = useState('');
-  const [selectedSubjectForQuiz, setSelectedSubjectForQuiz] = useState('');
-  const [selectedSubject, setSelectedSubject] = useState('');
-  const [selectedQuiz, setSelectedQuiz] = useState('');
-  const [questionText, setQuestionText] = useState('');
-  const [answers, setAnswers] = useState(['', '', '', '']);
-  const [correctIndex, setCorrectIndex] = useState(0);
-
-  const cardsContainerRef = useRef(null);
-
-  useEffect(() => { fetchSubjects(); }, []);
-
-  // GSAP Animation for Cards
   useEffect(() => {
-    if (questions.length > 0 && cardsContainerRef.current) {
-        gsap.fromTo(cardsContainerRef.current.children, 
-            { y: 20, opacity: 0 },
-            { y: 0, opacity: 1, stagger: 0.05, duration: 0.4, ease: "power2.out" }
-        );
-    }
-  }, [questions]);
-
-  // --- Fetching Functions ---
-  const fetchSubjects = async () => {
-    const snapshot = await getDocs(collection(db, "subjects"));
-    setSubjects(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-  };
-
-  const fetchQuizzes = async (subjectId) => {
-    if (!subjectId) { setQuizzes([]); return; }
-    const q = query(collection(db, "quizzes"), where("subjectId", "==", subjectId));
-    const snapshot = await getDocs(q);
-    setQuizzes(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-  };
-
-  const fetchQuestions = async (quizId) => {
-    if (!quizId) { setQuestions([]); return; }
-    const q = query(collection(db, "questions"), where("quizId", "==", quizId));
-    const snapshot = await getDocs(q);
-    setQuestions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-  };
-
-  // --- Reset Forms ---
-  const resetForms = () => {
-      setEditingId(null);
-      setSubjectName('');
-      setQuizTitle('');
-      setQuestionText('');
-      setAnswers(['', '', '', '']);
-      setCorrectIndex(0);
-  };
-
-  // --- 1. JSON Upload Logic (With Progress Bar) ---
-  const handleJsonUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file || !selectedQuiz) return toast.error("Select Quiz & JSON File");
-
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      setIsUploading(true);
-      setUploadProgress(0);
-      
-      try {
-        const jsonData = JSON.parse(event.target.result);
-        if (!Array.isArray(jsonData)) throw new Error("JSON must be an array");
-
-        const totalItems = jsonData.length;
-        const chunkSize = 50; // نقسم الملف لمجموعات صغيرة عشان العداد يبان
-        let processed = 0;
-
-        // تقسيم البيانات لـ Chunks
-        for (let i = 0; i < totalItems; i += chunkSize) {
-            const chunk = jsonData.slice(i, i + chunkSize);
-            const batch = writeBatch(db);
-
-            chunk.forEach((q) => {
-                const docRef = doc(collection(db, "questions"));
-                batch.set(docRef, {
-                    quizId: selectedQuiz,
-                    subjectId: selectedSubject,
-                    text: q.question,
-                    options: q.options,
-                    correctAnswer: q.answer,
-                    type: 'mcq'
-                });
-            });
-
-            await batch.commit();
-            
-            // تحديث النسبة المئوية
-            processed += chunk.length;
-            const percentage = Math.round((processed / totalItems) * 100);
-            setUploadProgress(percentage);
-            
-            // تأخير بسيط عشان العين تلحق تشوف الانميشن (اختياري)
-            await new Promise(r => setTimeout(r, 100));
-        }
-
-        toast.success(`Complete! Uploaded ${totalItems} cards.`);
-        fetchQuestions(selectedQuiz);
-      } catch (err) {
-        console.error(err);
-        toast.error("Invalid JSON Format");
+    const checkAdminRole = async () => {
+      if (!user?.uid) {
+        navigate('/dashboard');
+        return;
       }
-      
-      // Reset after delay
-      setTimeout(() => {
-          setIsUploading(false);
-          setUploadProgress(0);
-          e.target.value = null; // Clear input
-      }, 1000);
-    };
-    reader.readAsText(file);
-  };
 
-  // --- 2. Save Logic ---
-  const handleSaveSubject = async (e) => {
-    e.preventDefault();
-    if (!subjectName) return toast.error("Name required");
-    setLoading(true);
-    try {
-        if (editingId) {
-            await updateDoc(doc(db, "subjects", editingId), { name: subjectName });
-            toast.success("Subject Updated");
+      try {
+        const userDoc = await getDoc(doc(db, 'players', user.uid));
+        const userData = userDoc.data();
+        
+        if (userData?.isAdmin === true) {
+          setIsAdmin(true);
+          setIsLoading(false);
         } else {
-            await addDoc(collection(db, "subjects"), { name: subjectName, createdAt: new Date(), quizCount: 0 });
-            toast.success("Subject Created");
+          toast.error('ACCESS DENIED - ADMIN ONLY');
+          navigate('/dashboard');
         }
-        resetForms();
-        fetchSubjects();
-    } catch (err) { toast.error("Failed"); }
-    setLoading(false);
-  };
+      } catch (error) {
+        console.error('Admin check error:', error);
+        navigate('/dashboard');
+      }
+    };
 
-  const handleSaveQuiz = async (e) => {
-      e.preventDefault();
-      if (!quizTitle || !selectedSubjectForQuiz) return toast.error("Fields required");
-      setLoading(true);
-      try {
-          if (editingId) {
-              await updateDoc(doc(db, "quizzes", editingId), { title: quizTitle, subjectId: selectedSubjectForQuiz });
-              toast.success("Quiz Updated");
-          } else {
-              await addDoc(collection(db, "quizzes"), { title: quizTitle, subjectId: selectedSubjectForQuiz, createdAt: new Date() });
-              // تحديث عدد الكويزات في المادة
-              await updateDoc(doc(db, "subjects", selectedSubjectForQuiz), { quizCount: increment(1) });
-              toast.success("Quiz Created");
-          }
-          resetForms();
-          if (selectedSubjectForQuiz) fetchQuizzes(selectedSubjectForQuiz);
-      } catch (err) { toast.error("Failed"); }
-      setLoading(false);
-  };
+    checkAdminRole();
+  }, [user, navigate]);
 
-  const handleSaveQuestion = async (e) => {
-      e.preventDefault();
-      if (!selectedQuiz || !questionText) return toast.error("Fields required");
-      setLoading(true);
-      try {
-          const qData = {
-            quizId: selectedQuiz,
-            subjectId: selectedSubject,
-            text: questionText,
-            options: answers,
-            correctAnswer: answers[correctIndex],
-            type: 'mcq',
-          };
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-[#0f1923] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-16 h-16 border-4 border-red-500/20 border-t-red-500 rounded-full animate-spin"></div>
+          <p className="text-red-500 text-sm font-bold uppercase tracking-[0.3em]">VERIFYING ACCESS</p>
+        </div>
+      </div>
+    );
+  }
 
-          if (editingId) {
-              await updateDoc(doc(db, "questions", editingId), qData);
-              toast.success("Card Updated");
-          } else {
-              await addDoc(collection(db, "questions"), qData);
-              toast.success("Card Added");
-          }
-          
-          setQuestionText('');
-          setAnswers(['', '', '', '']);
-          setEditingId(null);
-          fetchQuestions(selectedQuiz);
-      } catch (err) { toast.error("Failed"); }
-      setLoading(false);
-  };
+  if (!isAdmin) return null;
 
-  // --- Delete & Edit Handlers ---
-  const handleDeleteSubject = async (id) => {
-      if(!window.confirm("Delete subject?")) return;
-      await deleteDoc(doc(db, "subjects", id));
-      toast.success("Deleted");
-      fetchSubjects();
-  };
-  const handleEditSubject = (sub) => {
-      setEditingId(sub.id); setSubjectName(sub.name); setActiveTab('subject'); window.scrollTo(0,0);
-  };
+  const tabs = [
+    { id: 'subjects', label: 'SUBJECTS', icon: BookOpen },
+    { id: 'users', label: 'USERS', icon: Users },
+    { id: 'analytics', label: 'ANALYTICS', icon: BarChart3 },
+    { id: 'settings', label: 'SETTINGS', icon: Settings },
+  ];
 
-  const handleEditQuestion = (q) => {
-      setEditingId(q.id); setQuestionText(q.text); setAnswers(q.options);
-      const idx = q.options.findIndex(opt => opt === q.correctAnswer);
-      setCorrectIndex(idx !== -1 ? idx : 0);
-      window.scrollTo(0,0);
-  };
-  const handleDeleteQuestion = async (id) => {
-      if(!window.confirm("Delete card?")) return;
-      await deleteDoc(doc(db, "questions", id));
-      toast.success("Deleted");
-      fetchQuestions(selectedQuiz);
+  // Breadcrumb navigation
+  const renderBreadcrumb = () => {
+    const items = [];
+    
+    if (selectedSubject) {
+      items.push(
+        <button
+          key="subjects"
+          onClick={() => { setSelectedSubject(null); setSelectedQuiz(null); }}
+          className="text-gray-400 hover:text-white transition-colors"
+        >
+          Subjects
+        </button>
+      );
+      items.push(<ChevronRight key="sep1" size={16} className="text-gray-600" />);
+      items.push(
+        <button
+          key="subject"
+          onClick={() => setSelectedQuiz(null)}
+          className={selectedQuiz ? "text-gray-400 hover:text-white transition-colors" : "text-red-500"}
+        >
+          {selectedSubject.name}
+        </button>
+      );
+    }
+    
+    if (selectedQuiz) {
+      items.push(<ChevronRight key="sep2" size={16} className="text-gray-600" />);
+      items.push(<span key="quiz" className="text-red-500">{selectedQuiz.title}</span>);
+    }
+    
+    return items.length > 0 ? (
+      <div className="flex items-center gap-2 mb-4 text-sm">
+        {items}
+      </div>
+    ) : null;
   };
 
   return (
-    <div className="min-h-screen p-6 md:p-12 max-w-6xl mx-auto">
-      <h1 className="text-4xl font-black italic uppercase mb-8">Admin <span className="text-indigo-500">Control</span></h1>
+    <div className="min-h-screen bg-[#0f1923] text-white">
+      {/* Background */}
+      <div className="fixed inset-0 opacity-[0.03]" style={{
+        backgroundImage: `linear-gradient(rgba(239,68,68,0.5) 1px, transparent 1px),
+                         linear-gradient(90deg, rgba(239,68,68,0.5) 1px, transparent 1px)`,
+        backgroundSize: '50px 50px'
+      }}></div>
 
-      <div className="flex flex-wrap gap-4 mb-8">
-        {[
-            {id: 'subject', label: 'Subjects', icon: <LayoutGrid size={16}/>}, 
-            {id: 'quiz', label: 'Quizzes', icon: <FileText size={16}/>}, 
-            {id: 'question', label: 'Cards', icon: <CheckCircle size={16}/>}
-        ].map((tab) => (
-            <button key={tab.id} onClick={() => { setActiveTab(tab.id); resetForms(); }} className={`px-6 py-3 rounded-xl font-bold uppercase tracking-wider transition-all flex items-center gap-2 ${activeTab === tab.id ? 'bg-indigo-600 text-white' : 'bg-white/5 text-gray-400 border border-white/5'}`}>
-                {tab.icon} {tab.label}
-            </button>
+      {/* Header */}
+      <div className="relative z-10 border-b border-red-500/30 bg-[#1a2332]">
+        <div className="max-w-7xl mx-auto px-4 md:px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="p-2 bg-red-500">
+              <Shield size={24} className="text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-black uppercase tracking-tight">ADMIN PANEL</h1>
+              <p className="text-red-500 text-xs uppercase tracking-wider font-bold">SYSTEM CONTROL</p>
+            </div>
+          </div>
+          
+          <button
+            onClick={() => navigate('/dashboard')}
+            className="flex items-center gap-2 px-4 py-2 border border-red-500/30 hover:border-red-500 hover:bg-red-500/10 transition-all"
+          >
+            <Home size={18} />
+            <span className="hidden md:inline text-sm uppercase font-bold">Dashboard</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="relative z-10 border-b border-red-500/20 bg-[#1a2332]/50">
+        <div className="max-w-7xl mx-auto px-4 md:px-6 flex gap-2 overflow-x-auto scrollbar-thin scrollbar-thumb-red-500/30">
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => {
+                  setActiveTab(tab.id);
+                  setSelectedSubject(null);
+                  setSelectedQuiz(null);
+                }}
+                className={`flex items-center gap-2 px-6 py-4 font-bold text-sm uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${
+                  activeTab === tab.id
+                    ? 'border-red-500 text-red-500 bg-red-500/10'
+                    : 'border-transparent text-gray-400 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <Icon size={18} />
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="relative z-10 max-w-7xl mx-auto px-4 md:px-6 py-6">
+        {renderBreadcrumb()}
+        
+        {activeTab === 'subjects' && !selectedSubject && (
+          <SubjectsManager onSelectSubject={setSelectedSubject} />
+        )}
+        {activeTab === 'subjects' && selectedSubject && !selectedQuiz && (
+          <QuizzesManager 
+            subject={selectedSubject} 
+            onSelectQuiz={setSelectedQuiz}
+            onBack={() => setSelectedSubject(null)}
+          />
+        )}
+        {activeTab === 'subjects' && selectedSubject && selectedQuiz && (
+          <QuestionsManager 
+            subject={selectedSubject}
+            quiz={selectedQuiz}
+            onBack={() => setSelectedQuiz(null)}
+          />
+        )}
+        {activeTab === 'users' && <UsersManager />}
+        {activeTab === 'analytics' && <AnalyticsDashboard />}
+        {activeTab === 'settings' && <SettingsPanel />}
+      </div>
+    </div>
+  );
+};
+
+// SUBJECTS MANAGER (unchanged from before)
+const SubjectsManager = ({ onSelectSubject }) => {
+  const [subjects, setSubjects] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingSubject, setEditingSubject] = useState(null);
+
+  useEffect(() => {
+    loadSubjects();
+  }, []);
+
+  const loadSubjects = async () => {
+    try {
+      const snap = await getDocs(collection(db, 'subjects'));
+      setSubjects(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    } catch (error) {
+      toast.error('Failed to load subjects');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async (subject) => {
+    if (!window.confirm(`Delete "${subject.name}"? This will delete all quizzes and questions!`)) return;
+    try {
+      await deleteDoc(doc(db, 'subjects', subject.id));
+      toast.success('Subject deleted');
+      loadSubjects();
+    } catch (error) {
+      toast.error('Failed to delete subject');
+    }
+  };
+
+  if (loading) return <div className="text-center py-12 text-gray-400">Loading...</div>;
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-2xl font-black uppercase">Subject Management</h2>
+        <button 
+          onClick={() => setShowCreateModal(true)}
+          className="flex items-center gap-2 px-4 py-2 bg-red-500 hover:bg-red-600 font-bold text-sm uppercase transition-all"
+        >
+          <Plus size={18} />
+          Add Subject
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {subjects.map(subject => (
+          <div key={subject.id} className="bg-[#1a2332] border border-red-500/20 p-6 relative group">
+            <h3 className="text-xl font-bold mb-2">{subject.name}</h3>
+            <p className="text-gray-400 text-sm mb-4">{subject.description || 'No description'}</p>
+            
+            <div className="flex gap-2">
+              <button 
+                onClick={() => onSelectSubject(subject)}
+                className="flex-1 py-2 bg-red-500 hover:bg-red-600 text-sm uppercase font-bold transition-all"
+              >
+                <ChevronRight size={14} className="inline mr-1" />
+                Quizzes
+              </button>
+              <button 
+                onClick={() => setEditingSubject(subject)}
+                className="px-3 py-2 border border-red-500/30 hover:bg-red-500/10 transition-all"
+              >
+                <Edit size={14} />
+              </button>
+              <button 
+                onClick={() => handleDelete(subject)}
+                className="px-3 py-2 border border-red-500 text-red-500 hover:bg-red-500 hover:text-white transition-all"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+
+            <div className="absolute top-2 left-2 w-4 h-4 border-l-2 border-t-2 border-red-500/50"></div>
+            <div className="absolute bottom-2 right-2 w-4 h-4 border-r-2 border-b-2 border-red-500/50"></div>
+          </div>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          
-          {/* Left Column: Form */}
-          <div className="lg:col-span-1 bg-[#0b0f1a] border border-white/10 p-6 rounded-3xl h-fit sticky top-6">
-             <h3 className="text-indigo-400 font-bold uppercase tracking-widest text-sm mb-6 flex items-center gap-2">
-                 {editingId ? <Edit size={16}/> : <Save size={16}/>} {editingId ? `EDIT ${activeTab}` : `NEW ${activeTab}`}
-             </h3>
-             
-             {/* --- SUBJECT FORM --- */}
-             {activeTab === 'subject' && (
-                 <form onSubmit={handleSaveSubject} className="space-y-4">
-                     <input value={subjectName} onChange={e => setSubjectName(e.target.value)} className="w-full bg-black/40 border border-white/10 p-3 rounded-xl text-white outline-none focus:border-indigo-500" placeholder="Subject Name" />
-                     <button disabled={loading} className="w-full bg-indigo-600 hover:bg-indigo-500 py-3 rounded-xl font-bold text-white text-xs tracking-widest uppercase">{editingId ? "Update" : "Create"}</button>
-                 </form>
-             )}
+      <SubjectModal 
+        isOpen={showCreateModal || editingSubject !== null}
+        onClose={() => {
+          setShowCreateModal(false);
+          setEditingSubject(null);
+        }}
+        subject={editingSubject}
+        onSave={() => {
+          loadSubjects();
+          setShowCreateModal(false);
+          setEditingSubject(null);
+        }}
+      />
+    </div>
+  );
+};
 
-             {/* --- QUIZ FORM --- */}
-             {activeTab === 'quiz' && (
-                 <form onSubmit={handleSaveQuiz} className="space-y-4">
-                     <select value={selectedSubjectForQuiz} onChange={e => setSelectedSubjectForQuiz(e.target.value)} className="w-full bg-black/40 border border-white/10 p-3 rounded-xl text-white outline-none">
-                         <option value="">-- Select Subject --</option>
-                         {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                     </select>
-                     <input value={quizTitle} onChange={e => setQuizTitle(e.target.value)} className="w-full bg-black/40 border border-white/10 p-3 rounded-xl text-white outline-none" placeholder="Quiz Title" />
-                     <button disabled={loading} className="w-full bg-indigo-600 hover:bg-indigo-500 py-3 rounded-xl font-bold text-white text-xs tracking-widest uppercase">{editingId ? "Update" : "Create"}</button>
-                 </form>
-             )}
+// Subject Modal (unchanged)
+const SubjectModal = ({ isOpen, onClose, subject, onSave }) => {
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [icon, setIcon] = useState('');
+  const [saving, setSaving] = useState(false);
 
-             {/* --- QUESTION FORM & JSON UPLOAD --- */}
-             {activeTab === 'question' && (
-                 <div className="space-y-6">
-                     <form onSubmit={handleSaveQuestion} className="space-y-4">
-                         <select value={selectedSubject} onChange={e => { setSelectedSubject(e.target.value); fetchQuizzes(e.target.value); }} className="w-full bg-black/40 border border-white/10 p-3 rounded-xl text-white text-xs">
-                             <option value="">1. Select Subject</option>
-                             {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                         </select>
-                         <select value={selectedQuiz} onChange={e => { setSelectedQuiz(e.target.value); fetchQuestions(e.target.value); }} disabled={!selectedSubject} className="w-full bg-black/40 border border-white/10 p-3 rounded-xl text-white text-xs">
-                             <option value="">2. Select Quiz</option>
-                             {quizzes.map(q => <option key={q.id} value={q.id}>{q.title}</option>)}
-                         </select>
-                         
-                         <div className="h-px bg-white/10"></div>
+  useEffect(() => {
+    if (subject) {
+      setName(subject.name || '');
+      setDescription(subject.description || '');
+      setIcon(subject.icon || '');
+    } else {
+      setName('');
+      setDescription('');
+      setIcon('');
+    }
+  }, [subject]);
 
-                         <textarea rows={3} value={questionText} onChange={e => setQuestionText(e.target.value)} className="w-full bg-black/40 border border-white/10 p-3 rounded-xl text-white text-sm outline-none" placeholder="Question Text..." />
-                         
-                         <div className="grid grid-cols-2 gap-2">
-                             {answers.map((ans, idx) => (
-                                 <div key={idx} className="relative">
-                                     <input value={ans} onChange={e => { const n = [...answers]; n[idx] = e.target.value; setAnswers(n); }} className={`w-full bg-black/40 border p-2 rounded-lg text-white text-xs outline-none ${correctIndex === idx ? 'border-green-500' : 'border-white/10'}`} placeholder={`Opt ${idx+1}`} />
-                                     <div onClick={() => setCorrectIndex(idx)} className={`w-3 h-3 rounded-full absolute top-2 right-2 cursor-pointer ${correctIndex === idx ? 'bg-green-500' : 'bg-gray-700'}`}></div>
-                                 </div>
-                             ))}
-                         </div>
+  const handleSave = async () => {
+    if (!name.trim()) {
+      toast.error('Name is required');
+      return;
+    }
 
-                         <div className="flex gap-2">
-                            <button disabled={loading || !selectedQuiz} className="flex-1 bg-indigo-600 hover:bg-indigo-500 py-3 rounded-xl font-bold text-white text-xs tracking-widest uppercase">
-                                {editingId ? "Save" : "Add Card"}
-                            </button>
-                            {editingId && <button type="button" onClick={resetForms} className="bg-gray-700 px-4 rounded-xl text-xs"><X size={14}/></button>}
-                         </div>
-                     </form>
+    setSaving(true);
+    try {
+      const data = { name, description, icon };
+      
+      if (subject) {
+        await updateDoc(doc(db, 'subjects', subject.id), data);
+        toast.success('Subject updated');
+      } else {
+        await addDoc(collection(db, 'subjects'), data);
+        toast.success('Subject created');
+      }
+      
+      onSave();
+    } catch (error) {
+      toast.error('Failed to save subject');
+    } finally {
+      setSaving(false);
+    }
+  };
 
-                     {/* --- JSON UPLOAD SECTION (The New Loader) --- */}
-                     {!editingId && (
-                         <div className="pt-6 border-t border-white/10">
-                            <div className="bg-indigo-900/10 p-4 rounded-xl border border-dashed border-indigo-500/30 text-center relative overflow-hidden">
-                                {isUploading ? (
-                                    <div className="py-4">
-                                        <div className="flex items-center justify-center gap-2 mb-2 text-indigo-400 font-bold animate-pulse">
-                                            <Loader2 size={20} className="animate-spin" />
-                                            UPLOADING DATA...
-                                        </div>
-                                        
-                                        {/* Progress Bar Container */}
-                                        <div className="w-full h-3 bg-black/40 rounded-full overflow-hidden border border-white/10">
-                                            {/* Actual Bar */}
-                                            <div 
-                                                className="h-full bg-gradient-to-r from-indigo-600 to-purple-500 transition-all duration-300 ease-out"
-                                                style={{ width: `${uploadProgress}%` }}
-                                            ></div>
-                                        </div>
-                                        
-                                        <p className="text-xs text-right mt-1 text-gray-400 font-mono">{uploadProgress}% COMPLETE</p>
-                                    </div>
-                                ) : (
-                                    <>
-                                        <p className="text-xs text-indigo-300 mb-2 uppercase tracking-widest flex items-center justify-center gap-2"><Upload size={14}/> Bulk Upload (JSON)</p>
-                                        <input 
-                                            type="file" 
-                                            accept=".json"
-                                            onChange={handleJsonUpload}
-                                            disabled={!selectedQuiz}
-                                            className="block w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-2 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-500 file:text-white hover:file:bg-indigo-600 disabled:opacity-50"
-                                        />
-                                        <div className="text-[9px] text-gray-500 mt-2 font-mono bg-black/20 p-2 rounded break-all flex items-center gap-2 justify-center">
-                                            <FileJson size={12}/> {`[{"question":"...","options":["A","B"],"answer":"A"}]`}
-                                        </div>
-                                    </>
-                                )}
-                            </div>
-                         </div>
-                     )}
-                 </div>
-             )}
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80">
+      <motion.div 
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        className="bg-[#1a2332] border-2 border-red-500 p-6 w-full max-w-md relative"
+      >
+        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-white">
+          <X size={20} />
+        </button>
+
+        <h3 className="text-xl font-black uppercase mb-4">
+          {subject ? 'EDIT SUBJECT' : 'CREATE SUBJECT'}
+        </h3>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-bold uppercase mb-2">Name</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full bg-[#0f1923] border border-red-500/30 px-4 py-2 text-white focus:border-red-500 outline-none"
+              placeholder="Subject name"
+            />
           </div>
 
-          {/* Right Column: Display Lists */}
-          <div className="lg:col-span-2 space-y-4">
-              
-              {/* SUBJECTS LIST */}
-              {activeTab === 'subject' && (
-                  <div className="space-y-2">
-                      {subjects.map(sub => (
-                          <div key={sub.id} className="bg-white/5 p-4 rounded-xl flex justify-between items-center hover:bg-white/10">
-                              <span className="font-bold">{sub.name}</span>
-                              <div className="flex gap-2">
-                                  <button onClick={() => handleEditSubject(sub)} className="text-blue-400 hover:bg-blue-400/20 p-2 rounded"><Edit size={16}/></button>
-                                  <button onClick={() => handleDeleteSubject(sub.id)} className="text-red-400 hover:bg-red-400/20 p-2 rounded"><Trash2 size={16}/></button>
-                              </div>
-                          </div>
-                      ))}
-                  </div>
-              )}
-
-              {/* QUIZZES LIST */}
-              {activeTab === 'quiz' && (
-                  <div className="space-y-2">
-                      <p className="text-xs text-gray-500 mb-2">Select a subject in the form to manage quizzes better.</p>
-                      {quizzes.length > 0 ? quizzes.map(quiz => (
-                          <div key={quiz.id} className="bg-white/5 p-4 rounded-xl flex justify-between items-center">
-                              <div><span className="font-bold block">{quiz.title}</span><span className="text-[10px] text-gray-500">ID: {quiz.id}</span></div>
-                              <div className="flex gap-2">
-                                  <button onClick={() => { setEditingId(quiz.id); setQuizTitle(quiz.title); setSelectedSubjectForQuiz(quiz.subjectId); window.scrollTo(0,0); }} className="text-blue-400 hover:bg-blue-400/20 p-2 rounded"><Edit size={16}/></button>
-                              </div>
-                          </div>
-                      )) : <p className="text-gray-500 italic">No quizzes loaded.</p>}
-                  </div>
-              )}
-
-              {/* QUESTIONS GRID */}
-              {activeTab === 'question' && (
-                  <div ref={cardsContainerRef} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {questions.length > 0 ? questions.map((q) => (
-                          <div key={q.id} className="bg-[#0b0f1a] border border-white/5 p-5 rounded-2xl relative group hover:border-indigo-500/30 transition-all">
-                              <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <button onClick={() => handleEditQuestion(q)} className="bg-blue-500/20 text-blue-400 p-1.5 rounded hover:bg-blue-500/40 transition-colors"><Edit size={14}/></button>
-                                  <button onClick={() => handleDeleteQuestion(q.id)} className="bg-red-500/20 text-red-400 p-1.5 rounded hover:bg-red-500/40 transition-colors"><Trash2 size={14}/></button>
-                              </div>
-                              <h4 className="font-bold text-sm mb-3 pr-16">{q.text}</h4>
-                              <div className="space-y-1">
-                                  {q.options.map((opt, idx) => (
-                                      <div key={idx} className={`text-xs p-2 rounded border ${opt === q.correctAnswer ? 'bg-green-500/10 border-green-500/30 text-green-400' : 'border-transparent text-gray-500'}`}>
-                                          {opt}
-                                      </div>
-                                  ))}
-                              </div>
-                          </div>
-                      )) : (
-                          <div className="col-span-full text-center py-10 text-gray-500 border border-dashed border-white/10 rounded-2xl">
-                              {selectedQuiz ? "No cards in this deck." : "Select Subject & Quiz to view."}
-                          </div>
-                      )}
-                  </div>
-              )}
+          <div>
+            <label className="block text-sm font-bold uppercase mb-2">Description</label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="w-full bg-[#0f1923] border border-red-500/30 px-4 py-2 text-white focus:border-red-500 outline-none resize-none"
+              rows={3}
+              placeholder="Subject description"
+            />
           </div>
+
+          <div>
+            <label className="block text-sm font-bold uppercase mb-2">Icon (emoji)</label>
+            <input
+              type="text"
+              value={icon}
+              onChange={(e) => setIcon(e.target.value)}
+              className="w-full bg-[#0f1923] border border-red-500/30 px-4 py-2 text-white focus:border-red-500 outline-none"
+              placeholder="📚"
+            />
+          </div>
+
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="w-full bg-red-500 hover:bg-red-600 py-3 font-bold uppercase flex items-center justify-center gap-2 disabled:opacity-50"
+          >
+            <Save size={18} />
+            {saving ? 'Saving...' : 'Save Subject'}
+          </button>
+        </div>
+
+        <div className="absolute -top-2 -left-2 w-6 h-6 border-l-2 border-t-2 border-red-500"></div>
+        <div className="absolute -bottom-2 -right-2 w-6 h-6 border-r-2 border-b-2 border-red-500"></div>
+      </motion.div>
+    </div>
+  );
+};
+
+// QUIZZES MANAGER
+const QuizzesManager = ({ subject, onSelectQuiz, onBack }) => {
+  const [quizzes, setQuizzes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingQuiz, setEditingQuiz] = useState(null);
+
+  useEffect(() => {
+    loadQuizzes();
+  }, [subject]);
+
+  const loadQuizzes = async () => {
+    try {
+      // Query from SUBCOLLECTION
+      const quizzesRef = collection(db, `subjects/${subject.id}/quizzes`);
+      const snap = await getDocs(quizzesRef);
+      setQuizzes(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    } catch (error) {
+      toast.error('Failed to load quizzes');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async (quiz) => {
+    if (!window.confirm(`Delete "${quiz.title}"? This will delete all questions!`)) return;
+    try {
+      // Delete from SUBCOLLECTION
+      await deleteDoc(doc(db, `subjects/${subject.id}/quizzes/${quiz.id}`));
+      toast.success('Quiz deleted');
+      loadQuizzes();
+    } catch (error) {
+      toast.error('Failed to delete quiz');
+    }
+  };
+
+  if (loading) return <div className="text-center py-12 text-gray-400">Loading...</div>;
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h2 className="text-2xl font-black uppercase">{subject.name} - Quizzes</h2>
+          <p className="text-gray-400 text-sm">{quizzes.length} quiz(zes)</p>
+        </div>
+        <button 
+          onClick={() => setShowCreateModal(true)}
+          className="flex items-center gap-2 px-4 py-2 bg-red-500 hover:bg-red-600 font-bold text-sm uppercase transition-all"
+        >
+          <Plus size={18} />
+          Add Quiz
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {quizzes.map(quiz => (
+          <div key={quiz.id} className="bg-[#1a2332] border border-red-500/20 p-6 relative">
+            <h3 className="text-xl font-bold mb-2">{quiz.title}</h3>
+            <div className="text-sm text-gray-400 mb-4">
+              <p>Difficulty: {quiz.difficulty || 'Medium'}</p>
+              <p>Time: {quiz.timeLimit || 180}s</p>
+            </div>
+            
+            <div className="flex gap-2">
+              <button 
+                onClick={() => onSelectQuiz(quiz)}
+                className="flex-1 py-2 bg-red-500 hover:bg-red-600 text-sm uppercase font-bold transition-all"
+              >
+                <ChevronRight size={14} className="inline mr-1" />
+                Questions
+              </button>
+              <button 
+                onClick={() => setEditingQuiz(quiz)}
+                className="px-3 py-2 border border-red-500/30 hover:bg-red-500/10 transition-all"
+              >
+                <Edit size={14} />
+              </button>
+              <button 
+                onClick={() => handleDelete(quiz)}
+                className="px-3 py-2 border border-red-500 text-red-500 hover:bg-red-500 hover:text-white transition-all"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+
+            <div className="absolute top-2 left-2 w-4 h-4 border-l-2 border-t-2 border-red-500/50"></div>
+            <div className="absolute bottom-2 right-2 w-4 h-4 border-r-2 border-b-2 border-red-500/50"></div>
+          </div>
+        ))}
+      </div>
+
+      <QuizModal 
+        isOpen={showCreateModal || editingQuiz !== null}
+        onClose={() => {
+          setShowCreateModal(false);
+          setEditingQuiz(null);
+        }}
+        quiz={editingQuiz}
+        subjectId={subject.id}
+        onSave={() => {
+          loadQuizzes();
+          setShowCreateModal(false);
+          setEditingQuiz(null);
+        }}
+      />
+    </div>
+  );
+};
+
+// Quiz Modal
+const QuizModal = ({ isOpen, onClose, quiz, subjectId, onSave }) => {
+  const [title, setTitle] = useState('');
+  const [difficulty, setDifficulty] = useState('Medium');
+  const [timeLimit, setTimeLimit] = useState(180);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (quiz) {
+      setTitle(quiz.title || '');
+      setDifficulty(quiz.difficulty || 'Medium');
+      setTimeLimit(quiz.timeLimit || 180);
+    } else {
+      setTitle('');
+      setDifficulty('Medium');
+      setTimeLimit(180);
+    }
+  }, [quiz]);
+
+  const handleSave = async () => {
+    if (!title.trim()) {
+      toast.error('Title is required');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const data = { title, difficulty, timeLimit: Number(timeLimit) };
+      // Remove subjectId from data since it's in the path
+      
+      if (quiz) {
+        // Update in SUBCOLLECTION
+        await updateDoc(doc(db, `subjects/${subjectId}/quizzes/${quiz.id}`), data);
+        toast.success('Quiz updated');
+      } else {
+        // Create in SUBCOLLECTION
+        await addDoc(collection(db, `subjects/${subjectId}/quizzes`), data);
+        toast.success('Quiz created');
+      }
+      
+      onSave();
+    } catch (error) {
+      toast.error('Failed to save quiz');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80">
+      <motion.div 
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        className="bg-[#1a2332] border-2 border-red-500 p-6 w-full max-w-md relative"
+      >
+        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-white">
+          <X size={20} />
+        </button>
+
+        <h3 className="text-xl font-black uppercase mb-4">
+          {quiz ? 'EDIT QUIZ' : 'CREATE QUIZ'}
+        </h3>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-bold uppercase mb-2">Title</label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="w-full bg-[#0f1923] border border-red-500/30 px-4 py-2 text-white focus:border-red-500 outline-none"
+              placeholder="Quiz title"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-bold uppercase mb-2">Difficulty</label>
+            <select
+              value={difficulty}
+              onChange={(e) => setDifficulty(e.target.value)}
+              className="w-full bg-[#0f1923] border border-red-500/30 px-4 py-2 text-white focus:border-red-500 outline-none"
+            >
+              <option>Easy</option>
+              <option>Medium</option>
+              <option>Hard</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-bold uppercase mb-2">Time Limit (seconds)</label>
+            <input
+              type="number"
+              value={timeLimit}
+              onChange={(e) => setTimeLimit(e.target.value)}
+              className="w-full bg-[#0f1923] border border-red-500/30 px-4 py-2 text-white focus:border-red-500 outline-none"
+            />
+          </div>
+
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="w-full bg-red-500 hover:bg-red-600 py-3 font-bold uppercase flex items-center justify-center gap-2 disabled:opacity-50"
+          >
+            <Save size={18} />
+            {saving ? 'Saving...' : 'Save Quiz'}
+          </button>
+        </div>
+
+        <div className="absolute -top-2 -left-2 w-6 h-6 border-l-2 border-t-2 border-red-500"></div>
+        <div className="absolute -bottom-2 -right-2 w-6 h-6 border-r-2 border-b-2 border-red-500"></div>
+      </motion.div>
+    </div>
+  );
+};
+
+// QUESTIONS MANAGER (will continue in next message due to length)
+const QuestionsManager = ({ subject, quiz, onBack }) => {
+  const [questions, setQuestions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [editingQuestion, setEditingQuestion] = useState(null);
+
+  useEffect(() => {
+    loadQuestions();
+  }, [quiz]);
+
+  const loadQuestions = async () => {
+    try {
+      // Query from SUBCOLLECTION
+      const questionsRef = collection(db, `subjects/${subject.id}/quizzes/${quiz.id}/questions`);
+      const snap = await getDocs(questionsRef);
+      setQuestions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    } catch (error) {
+      toast.error('Failed to load questions');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async (question) => {
+    if (!window.confirm('Delete this question?')) return;
+    try {
+      // Delete from SUBCOLLECTION
+      await deleteDoc(doc(db, `subjects/${subject.id}/quizzes/${quiz.id}/questions/${question.id}`));
+      toast.success('Question deleted');
+      loadQuestions();
+    } catch (error) {
+      toast.error('Failed to delete question');
+    }
+  };
+
+  if (loading) return <div className="text-center py-12 text-gray-400">Loading...</div>;
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h2 className="text-2xl font-black uppercase">{quiz.title} - Questions</h2>
+          <p className="text-gray-400 text-sm">{questions.length} question(s)</p>
+        </div>
+        <div className="flex gap-2">
+          <button 
+            onClick={() => setShowUploadModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 font-bold text-sm uppercase transition-all"
+          >
+            <Upload size={18} />
+            Upload JSON
+          </button>
+          <button 
+            onClick={() => setShowCreateModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-red-500 hover:bg-red-600 font-bold text-sm uppercase transition-all"
+          >
+            <Plus size={18} />
+            Add Question
+          </button>
+        </div>
+      </div>
+
+      {/* Game-style question cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {questions.map((question, index) => (
+          <div key={question.id} className="bg-[#1a2332] border-2 border-red-500/30 p-6 relative">
+            <div className="absolute top-2 right-2 text-red-500 font-bold text-sm">#{index + 1}</div>
+            
+            <h3 className="text-lg font-bold mb-4 pr-8">{question.question}</h3>
+            
+            <div className="space-y-2 mb-4">
+              {question.options?.map((opt, i) => (
+                <div 
+                  key={i}
+                  className={`px-4 py-2 border ${
+                    opt === question.correctAnswer 
+                      ? 'border-green-500 bg-green-500/10 text-green-400' 
+                      : 'border-red-500/30 bg-red-500/5'
+                  }`}
+                >
+                  {opt}
+                </div>
+              ))}
+            </div>
+
+            <div className="flex gap-2">
+              <button 
+                onClick={() => setEditingQuestion(question)}
+                className="flex-1 py-2 border border-red-500/30 hover:bg-red-500/10 text-sm uppercase font-bold transition-all"
+              >
+                <Edit size={14} className="inline mr-1" />
+                Edit
+              </button>
+              <button 
+                onClick={() => handleDelete(question)}
+                className="flex-1 py-2 border border-red-500 text-red-500 hover:bg-red-500 hover:text-white text-sm uppercase font-bold transition-all"
+              >
+                <Trash2 size={14} className="inline mr-1" />
+                Delete
+              </button>
+            </div>
+
+            <div className="absolute top-2 left-2 w-3 h-3 border-l-2 border-t-2 border-red-500/50"></div>
+            <div className="absolute bottom-2 right-2 w-3 h-3 border-r-2 border-b-2 border-red-500/50"></div>
+          </div>
+        ))}
+      </div>
+
+      <QuestionModal 
+        isOpen={showCreateModal || editingQuestion !== null}
+        onClose={() => {
+          setShowCreateModal(false);
+          setEditingQuestion(null);
+        }}
+        question={editingQuestion}
+        quizId={quiz.id}
+        subjectId={subject.id}
+        onSave={() => {
+          loadQuestions();
+          setShowCreateModal(false);
+          setEditingQuestion(null);
+        }}
+      />
+
+      <UploadQuestionsModal 
+        isOpen={showUploadModal}
+        onClose={() => setShowUploadModal(false)}
+        quizId={quiz.id}
+        subjectId={subject.id}
+        onUpload={() => {
+          loadQuestions();
+          setShowUploadModal(false);
+        }}
+      />
+    </div>
+  );
+};
+
+// Question Modal - UPDATE SIGNATURE TO INCLUDE subjectId
+const QuestionModal = ({ isOpen, onClose, question, quizId, subjectId, onSave }) => {
+  const [questionText, setQuestionText] = useState('');
+  const [options, setOptions] = useState(['', '', '', '']);
+  const [correctAnswer, setCorrectAnswer] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (question) {
+      setQuestionText(question.question || '');
+      setOptions(question.options || ['', '', '', '']);
+      setCorrectAnswer(question.correctAnswer || '');
+    } else {
+      setQuestionText('');
+      setOptions(['', '', '', '']);
+      setCorrectAnswer('');
+    }
+  }, [question]);
+
+  const handleSave = async () => {
+    if (!questionText.trim()) {
+      toast.error('Question is required');
+      return;
+    }
+    if (options.some(opt => !opt.trim())) {
+      toast.error('All options are required');
+      return;
+    }
+    if (!correctAnswer) {
+      toast.error('Please select correct answer');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const data = { question: questionText, options, correctAnswer };
+      // Remove quizId from data since it's in the path
+      
+      if (question) {
+        // Update in SUBCOLLECTION
+        await updateDoc(doc(db, `subjects/${subjectId}/quizzes/${quizId}/questions/${question.id}`), data);
+        toast.success('Question updated');
+      } else {
+        // Create in SUBCOLLECTION
+        await addDoc(collection(db, `subjects/${subjectId}/quizzes/${quizId}/questions`), data);
+        toast.success('Question created');
+      }
+      
+      onSave();
+    } catch (error) {
+      toast.error('Failed to save question');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 overflow-y-auto">
+      <motion.div 
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        className="bg-[#1a2332] border-2 border-red-500 p-6 w-full max-w-2xl relative my-8"
+      >
+        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-white">
+          <X size={20} />
+        </button>
+
+        <h3 className="text-xl font-black uppercase mb-4">
+          {question ? 'EDIT QUESTION' : 'CREATE QUESTION'}
+        </h3>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-bold uppercase mb-2">Question</label>
+            <textarea
+              value={questionText}
+              onChange={(e) => setQuestionText(e.target.value)}
+              className="w-full bg-[#0f1923] border border-red-500/30 px-4 py-2 text-white focus:border-red-500 outline-none resize-none"
+              rows={3}
+              placeholder="Enter your question"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {options.map((opt, index) => (
+              <div key={index}>
+                <label className="block text-sm font-bold uppercase mb-2">Option {index + 1}</label>
+                <input
+                  type="text"
+                  value={opt}
+                  onChange={(e) => {
+                    const newOptions = [...options];
+                    newOptions[index] = e.target.value;
+                    setOptions(newOptions);
+                  }}
+                  className="w-full bg-[#0f1923] border border-red-500/30 px-4 py-2 text-white focus:border-red-500 outline-none"
+                  placeholder={`Option ${index + 1}`}
+                />
+              </div>
+            ))}
+          </div>
+
+          <div>
+            <label className="block text-sm font-bold uppercase mb-2">Correct Answer</label>
+            <select
+              value={correctAnswer}
+              onChange={(e) => setCorrectAnswer(e.target.value)}
+              className="w-full bg-[#0f1923] border border-red-500/30 px-4 py-2 text-white focus:border-red-500 outline-none"
+            >
+              <option value="">Select correct answer...</option>
+              {options.filter(opt => opt.trim()).map((opt, index) => (
+                <option key={index} value={opt}>{opt}</option>
+              ))}
+            </select>
+          </div>
+
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="w-full bg-red-500 hover:bg-red-600 py-3 font-bold uppercase flex items-center justify-center gap-2 disabled:opacity-50"
+          >
+            <Save size={18} />
+            {saving ? 'Saving...' : 'Save Question'}
+          </button>
+        </div>
+
+        <div className="absolute -top-2 -left-2 w-6 h-6 border-l-2 border-t-2 border-red-500"></div>
+        <div className="absolute -bottom-2 -right-2 w-6 h-6 border-r-2 border-b-2 border-red-500"></div>
+      </motion.div>
+    </div>
+  );
+};
+
+// Upload Questions Modal - UPDATE SIGNATURE TO INCLUDE subjectId
+const UploadQuestionsModal = ({ isOpen, onClose, quizId, subjectId, onUpload }) => {
+  const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [preview, setPreview] = useState(null);
+  const fileInputRef = useRef(null);
+
+  const handleFileSelect = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (file.type !== 'application/json') {
+      toast.error('Please upload a JSON file');
+      return;
+    }
+
+    try {
+      const text = await file.text();
+      const json = JSON.parse(text);
+      
+      if (!Array.isArray(json)) {
+        toast.error('JSON must be an array of questions');
+        return;
+      }
+
+      // Validate each question
+      const errors = [];
+      json.forEach((q, index) => {
+        if (!q.question || typeof q.question !== 'string' || !q.question.trim()) {
+          errors.push(`Question ${index + 1}: Missing or empty question text`);
+        }
+        if (!Array.isArray(q.options) || q.options.length !== 4) {
+          errors.push(`Question ${index + 1}: Must have exactly 4 options`);
+        }
+        if (q.options && q.options.some(opt => !opt || typeof opt !== 'string' || !opt.trim())) {
+          errors.push(`Question ${index + 1}: All options must be non-empty strings`);
+        }
+        if (!q.correctAnswer || typeof q.correctAnswer !== 'string' || !q.correctAnswer.trim()) {
+          errors.push(`Question ${index + 1}: Missing or empty correctAnswer`);
+        }
+        if (q.correctAnswer && q.options && !q.options.includes(q.correctAnswer)) {
+          errors.push(`Question ${index + 1}: correctAnswer must be one of the options`);
+        }
+      });
+
+      if (errors.length > 0) {
+        toast.error(`Validation failed:\n${errors.slice(0, 3).join('\n')}`);
+        console.error('All validation errors:', errors);
+        return;
+      }
+
+      setPreview(json);
+    } catch (error) {
+      toast.error('Invalid JSON file: ' + error.message);
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!preview || preview.length === 0) return;
+
+    setUploading(true);
+    setProgress(0);
+
+    try {
+      const batch = writeBatch(db);
+      const total = preview.length;
+
+      preview.forEach((q, index) => {
+        // Double-check data is valid before adding to batch - with null safety
+        if (!q.question || !q.options || !q.correctAnswer) {
+          console.error(`Skipping invalid question at index ${index}:`, q);
+          return;
+        }
+
+        // Create in SUBCOLLECTION
+        const questionRef = doc(collection(db, `subjects/${subjectId}/quizzes/${quizId}/questions`));
+        
+        const questionData = {
+          question: String(q.question).trim(),
+          options: q.options.map(opt => String(opt || '').trim()),
+          correctAnswer: String(q.correctAnswer).trim()
+          // No quizId needed - it's in the path
+        };
+
+        batch.set(questionRef, questionData);
+        setProgress(Math.round(((index + 1) / total) * 100));
+      });
+
+      await batch.commit();
+      toast.success(`${total} questions uploaded successfully!`);
+      onUpload();
+    } catch (error) {
+      console.error('Upload error:', error);
+      toast.error('Upload failed: ' + error.message);
+    } finally {
+      setUploading(false);
+      setProgress(0);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80">
+      <motion.div 
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        className="bg-[#1a2332] border-2 border-red-500 p-6 w-full max-w-2xl relative max-h-[80vh] overflow-y-auto"
+      >
+        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-white">
+          <X size={20} />
+        </button>
+
+        <h3 className="text-xl font-black uppercase mb-4 flex items-center gap-2">
+          <Upload size={24} />
+          UPLOAD QUESTIONS (JSON)
+        </h3>
+
+        {!preview ? (
+          <div>
+            <div 
+              onClick={() => fileInputRef.current?.click()}
+              className="border-2 border-dashed border-red-500/30 hover:border-red-500 p-12 text-center cursor-pointer transition-all"
+            >
+              <FileJson size={48} className="mx-auto mb-4 text-red-500" />
+              <p className="text-gray-400 mb-2">Click to select JSON file</p>
+              <p className="text-xs text-gray-500">Format: [{"{"}"question": "...", "options": [...], "correctAnswer": "..."{"}"}]</p>
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json"
+              onChange={handleFileSelect}
+              className="hidden"
+            />
+          </div>
+        ) : (
+          <div>
+            <div className="mb-4 p-4 bg-green-500/10 border border-green-500/30">
+              <p className="text-green-400 font-bold">✓ {preview.length} questions ready to upload</p>
+            </div>
+
+            {uploading && (
+              <div className="mb-4">
+                <div className="flex justify-between text-sm mb-2">
+                  <span>Uploading...</span>
+                  <span>{progress}%</span>
+                </div>
+                <div className="h-2 bg-[#0f1923] overflow-hidden">
+                  <div 
+                    className="h-full bg-red-500 transition-all duration-300"
+                    style={{ width: `${progress}%` }}
+                  ></div>
+                </div>
+              </div>
+            )}
+
+            <div className="max-h-64 overflow-y-auto mb-4 space-y-2">
+              {preview.slice(0, 5).map((q, index) => (
+                <div key={index} className="bg-[#0f1923] p-3 border border-red-500/20 text-sm">
+                  <p className="font-bold mb-1">{index + 1}. {q.question}</p>
+                  <p className="text-gray-400 text-xs">
+                    Options: {q.options?.join(', ')} | Correct: {q.correctAnswer}
+                  </p>
+                </div>
+              ))}
+              {preview.length > 5 && (
+                <p className="text-gray-400 text-center text-sm">
+                  ...and {preview.length - 5} more
+                </p>
+              )}
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => setPreview(null)}
+                disabled={uploading}
+                className="flex-1 py-3 border border-red-500/30 hover:bg-red-500/10 font-bold uppercase disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleUpload}
+                disabled={uploading}
+                className="flex-1 bg-red-500 hover:bg-red-600 py-3 font-bold uppercase flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {uploading ? (
+                  <>
+                    <Loader size={18} className="animate-spin" />
+                    Uploading...
+                  </>
+                ) : (
+                  <>
+                    <Upload size={18} />
+                    Upload {preview.length} Questions
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="absolute -top-2 -left-2 w-6 h-6 border-l-2 border-t-2 border-red-500"></div>
+        <div className="absolute -bottom-2 -right-2 w-6 h-6 border-r-2 border-b-2 border-red-500"></div>
+      </motion.div>
+    </div>
+  );
+};
+
+// USER MANAGER, ANALYTICS, SETTINGS (same as before but I'll include for completeness)
+const UsersManager = () => {
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  useEffect(() => {
+    loadUsers();
+  }, []);
+
+  const loadUsers = async () => {
+    try {
+      const snap = await getDocs(collection(db, 'players'));
+      setUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    } catch (error) {
+      toast.error('Failed to load users');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleToggleAdmin = async (userId, currentValue) => {
+    try {
+      await updateDoc(doc(db, 'players', userId), { isAdmin: !currentValue });
+      toast.success('Admin status updated');
+      loadUsers();
+    } catch (error) {
+      toast.error('Failed to update admin status');
+    }
+  };
+
+  const handleDeleteUser = async (userId, userName) => {
+    if (!window.confirm(`Delete user "${userName}"? This cannot be undone!`)) return;
+
+    try {
+      await deleteDoc(doc(db, 'players', userId));
+      toast.success('User deleted');
+      loadUsers();
+    } catch (error) {
+      toast.error('Failed to delete user');
+    }
+  };
+
+  const filteredUsers = users.filter(u => 
+    u.displayName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    u.email?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  if (loading) return <div className="text-center py-12 text-gray-400">Loading...</div>;
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-2xl font-black uppercase">User Management</h2>
+        <div className="flex items-center gap-2 bg-[#1a2332] border border-red-500/30 px-4 py-2">
+          <Search size={18} className="text-gray-400" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search users..."
+            className="bg-transparent outline-none text-white"
+          />
+        </div>
+      </div>
+
+      <div className="bg-[#1a2332] border border-red-500/20 overflow-hidden">
+        <table className="w-full">
+          <thead className="bg-red-500/10 border-b border-red-500/30">
+            <tr>
+              <th className="text-left p-4 font-bold uppercase text-sm">User</th>
+              <th className="text-left p-4 font-bold uppercase text-sm">Stats</th>
+              <th className="text-left p-4 font-bold uppercase text-sm">Admin</th>
+              <th className="text-left p-4 font-bold uppercase text-sm">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredUsers.map(user => (
+              <tr key={user.id} className="border-b border-red-500/10 hover:bg-red-500/5">
+                <td className="p-4">
+                  <div className="flex items-center gap-3">
+                    {user.avatar?.url && (
+                      <img src={user.avatar.url} alt="" className="w-10 h-10 border border-red-500" />
+                    )}
+                    <div>
+                      <p className="font-bold">{user.displayName || 'No name'}</p>
+                      <p className="text-xs text-gray-400">{user.email || 'No email'}</p>
+                    </div>
+                  </div>
+                </td>
+                <td className="p-4 text-sm">
+                  <div className="flex gap-4">
+                    <span className="text-gray-400">XP: <span className="text-white font-bold">{user.xp || 0}</span></span>
+                    <span className="text-gray-400">Wins: <span className="text-white font-bold">{user.wins || 0}</span></span>
+                  </div>
+                </td>
+                <td className="p-4">
+                  <button
+                    onClick={() => handleToggleAdmin(user.id, user.isAdmin)}
+                    className={`px-3 py-1 text-xs font-bold uppercase ${
+                      user.isAdmin 
+                        ? 'bg-red-500 text-white' 
+                        : 'bg-gray-700 text-gray-400'
+                    }`}
+                  >
+                    {user.isAdmin ? 'ADMIN' : 'USER'}
+                  </button>
+                </td>
+                <td className="p-4">
+                  <button
+                    onClick={() => handleDeleteUser(user.id, user.displayName)}
+                    className="text-red-500 hover:text-red-400 text-sm font-bold uppercase"
+                  >
+                    <Trash2 size={16} className="inline" /> Delete
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
+const AnalyticsDashboard = () => {
+  const [stats, setStats] = useState({ totalUsers: 0, admins: 0, totalXP: 0 });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadStats();
+  }, []);
+
+  const loadStats = async () => {
+    try {
+      const usersSnap = await getDocs(collection(db, 'players'));
+      const users = usersSnap.docs.map(d => d.data());
+      
+      setStats({
+        totalUsers: users.length,
+        admins: users.filter(u => u.isAdmin).length,
+        totalXP: users.reduce((sum, u) => sum + (u.xp || 0), 0)
+      });
+    } catch (error) {
+      toast.error('Failed to load stats');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) return <div className="text-center py-12 text-gray-400">Loading...</div>;
+
+  return (
+    <div>
+      <h2 className="text-2xl font-black uppercase mb-6">Analytics</h2>
+      
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <StatCard icon={UserIcon} label="Total Users" value={stats.totalUsers} color="blue" />
+        <StatCard icon={Shield} label="Admins" value={stats.admins} color="red" />
+        <StatCard icon={TrendingUp} label="Total XP" value={stats.totalXP.toLocaleString()} color="green" />
+      </div>
+    </div>
+  );
+};
+
+const StatCard = ({ icon: Icon, label, value, color }) => {
+  const colors = {
+    blue: 'border-blue-500/30 bg-blue-500/10 text-blue-500',
+    red: 'border-red-500/30 bg-red-500/10 text-red-500',
+    green: 'border-green-500/30 bg-green-500/10 text-green-500',
+  };
+
+  return (
+    <div className={`border-2 ${colors[color]} p-6 relative`}>
+      <Icon size={32} className="mb-2" />
+      <p className="text-3xl font-black">{value}</p>
+      <p className="text-sm uppercase font-bold text-gray-400">{label}</p>
+      
+      <div className="absolute top-2 right-2 w-3 h-3 border-r-2 border-t-2 border-current opacity-30"></div>
+      <div className="absolute bottom-2 left-2 w-3 h-3 border-l-2 border-b-2 border-current opacity-30"></div>
+    </div>
+  );
+};
+
+const SettingsPanel = () => {
+  return (
+    <div>
+      <h2 className="text-2xl font-black uppercase mb-6">Settings</h2>
+      <div className="bg-[#1a2332] border border-red-500/20 p-6">
+        <p className="text-gray-400">System settings will be added here.</p>
       </div>
     </div>
   );

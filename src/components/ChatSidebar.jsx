@@ -1,49 +1,46 @@
-import { useState, useEffect, useRef } from 'react';
-import { getDatabase, ref, push, onValue, serverTimestamp } from 'firebase/database';
-import { useSelector } from 'react-redux';
+import { useState, useEffect, useRef, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { MessageCircle, X, Send } from 'lucide-react';
+import { useSelector } from 'react-redux';
+import { ref as dbRef, push, onValue, query, limitToLast } from 'firebase/database';
+import { rtdb } from '../firebaseConfig';
 
 const ChatSidebar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState([]);
-  
-  const { user } = useSelector((state) => state.auth);
-  const rtdb = getDatabase(); 
   const messagesEndRef = useRef(null);
+  const { user } = useSelector((state) => state.auth);
 
   useEffect(() => {
-    // تحميل الرسايل فقط لو الشات مفتوح (توفير للداتا)
     if (!isOpen) return;
 
-    const chatRef = ref(rtdb, 'community_chat');
-    const unsubscribe = onValue(chatRef, (snapshot) => {
-      const data = snapshot.val();
+    const messagesRef = dbRef(rtdb, 'globalChat');
+    const messagesQuery = query(messagesRef, limitToLast(30));
+
+    const unsubscribe = onValue(messagesQuery, (snapshot) => {
       const loadedMessages = [];
-      for (const key in data) {
-        loadedMessages.push({ id: key, ...data[key] });
-      }
-      setMessages(loadedMessages.slice(-50));
+      snapshot.forEach((child) => {
+        loadedMessages.push({ id: child.key, ...child.val() });
+      });
+      setMessages(loadedMessages);
     });
 
     return () => unsubscribe();
-  }, [isOpen, rtdb]);
+  }, [isOpen]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isOpen]);
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
-  const handleSend = (e) => {
-    e.preventDefault();
-    if (!message.trim()) return;
+  const sendMessage = () => {
+    if (!message.trim() || !user) return;
 
-    const chatRef = ref(rtdb, 'community_chat');
-    push(chatRef, {
+    push(dbRef(rtdb, 'globalChat'), {
       text: message,
-      sender: user.displayName || "Unknown",
-      senderId: user.uid,
-      timestamp: serverTimestamp(),
-      avatarIcon: user.photoURL || "👤" 
+      sender: user.displayName || user.email,
+      uid: user.uid,
+      timestamp: Date.now(),
     });
 
     setMessage('');
@@ -51,75 +48,103 @@ const ChatSidebar = () => {
 
   return (
     <>
-      {/* التعديل هنا: الزرار بيظهر فقط لو القائمة مقفولة 
-        استخدمنا AnimatePresence عشان يختفي بنعومة
-      */}
-      <AnimatePresence>
-        {!isOpen && (
-            <motion.button 
-                initial={{ scale: 0, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0, opacity: 0 }}
-                onClick={() => setIsOpen(true)}
-                className="fixed bottom-6 right-6 z-50 bg-indigo-600 hover:bg-indigo-500 text-white p-4 rounded-full shadow-lg shadow-indigo-600/30 transition-transform hover:scale-110"
-            >
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>
-            </motion.button>
-        )}
-      </AnimatePresence>
+      {/* Toggle Button */}
+      <motion.button
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95 }}
+        onClick={() => setIsOpen(!isOpen)}
+        className="fixed bottom-6 right-6 z-50 p-4 bg-red-500 hover:bg-red-600 border-2 border-red-400 shadow-xl transition-all group"
+      >
+        <MessageCircle size={24} className="text-white" />
+        <motion.div
+          className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full"
+          animate={{ scale: [1, 1.2, 1] }}
+          transition={{ duration: 2, repeat: Infinity }}
+        />
+      </motion.button>
 
-      {/* Chat Panel */}
+      {/* Chat Sidebar */}
       <AnimatePresence>
         {isOpen && (
-          <motion.div 
-            initial={{ x: "100%" }}
+          <motion.div
+            initial={{ x: '100%' }}
             animate={{ x: 0 }}
-            exit={{ x: "100%" }}
-            transition={{ type: "spring", stiffness: 300, damping: 30 }}
-            className="fixed inset-y-0 right-0 w-80 md:w-96 bg-[#0b0f1a]/95 backdrop-blur-xl border-l border-white/10 shadow-2xl z-40 flex flex-col"
+            exit={{ x: '100%' }}
+            transition={{ type: 'tween', duration: 0.3 }}
+            className="fixed top-0 right-0 h-full w-full sm:w-96 bg-[#1a2332] border-l-2 border-red-500/30 shadow-2xl z-50 flex flex-col"
           >
             {/* Header */}
-            <div className="p-4 border-b border-white/10 flex justify-between items-center bg-indigo-900/20">
-              <h3 className="font-bold text-white tracking-widest text-sm flex items-center gap-2">
-                <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                COMMUNITY CHANNEL
-              </h3>
-              <button onClick={() => setIsOpen(false)} className="text-gray-400 hover:text-white text-xl font-bold">✕</button>
+            <div className="bg-[#0f1923] border-b-2 border-red-500/30 p-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <MessageCircle size={20} className="text-red-500" />
+                <h3 className="text-white font-black uppercase tracking-wider text-sm">GLOBAL CHAT</h3>
+              </div>
+              <motion.button
+                whileHover={{ rotate: 90 }}
+                onClick={() => setIsOpen(false)}
+                className="p-2 hover:bg-red-500/10 border border-transparent hover:border-red-500/30 transition-all"
+              >
+                <X size={20} className="text-red-500" />
+              </motion.button>
             </div>
 
-            {/* Messages Area */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#0f1923]/50">
               {messages.map((msg) => {
-                const isMe = msg.senderId === user.uid;
+                const isMyMessage = msg.uid === user?.uid;
                 return (
-                    <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
-                        <div className={`flex items-end gap-2 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
-                            <div className="w-6 h-6 rounded-full bg-gray-700 flex items-center justify-center text-[10px] border border-white/20">
-                                {msg.avatarIcon || "👤"}
-                            </div>
-                            <div className={`px-4 py-2 rounded-2xl text-sm max-w-[85%] break-words ${isMe ? 'bg-indigo-600 text-white rounded-br-none' : 'bg-gray-800 text-gray-200 rounded-bl-none'}`}>
-                                <span className="block text-[9px] opacity-50 font-bold mb-1 tracking-wider uppercase">{msg.sender}</span>
-                                {msg.text}
-                            </div>
-                        </div>
+                  <motion.div
+                    key={msg.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className={`flex ${isMyMessage ? 'justify-end' : 'justify-start'}`}
+                  >
+                    <div
+                      className={`max-w-[75%] ${
+                        isMyMessage
+                          ? 'bg-red-500 text-white'
+                          : 'bg-[#1a2332] text-white border border-red-500/20'
+                      } px-4 py-2 relative`}
+                    >
+                      {!isMyMessage && (
+                        <p className="text-red-500 text-[10px] font-bold uppercase mb-1">
+                          {msg.sender}
+                        </p>
+                      )}
+                      <p className="text-sm break-words">{msg.text}</p>
+                      
+                      {/* Corner accents */}
+                      <div className={`absolute top-0 left-0 w-2 h-2 border-l border-t ${isMyMessage ? 'border-red-400' : 'border-red-500/50'}`}></div>
+                      <div className={`absolute bottom-0 right-0 w-2 h-2 border-r border-b ${isMyMessage ? 'border-red-400' : 'border-red-500/50'}`}></div>
                     </div>
-                )
+                  </motion.div>
+                );
               })}
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Input Area */}
-            <form onSubmit={handleSend} className="p-4 border-t border-white/10 bg-black/20">
-                <div className="flex gap-2">
-                    <input 
-                        value={message}
-                        onChange={(e) => setMessage(e.target.value)}
-                        placeholder="Broadcast message..."
-                        className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-2 text-sm text-white focus:border-indigo-500 outline-none"
-                    />
-                    <button type="submit" className="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 rounded-xl">➤</button>
-                </div>
-            </form>
+            {/* Input */}
+            <div className="bg-[#0f1923] border-t-2 border-red-500/30 p-4">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+                  placeholder="TYPE MESSAGE..."
+                  className="flex-1 bg-[#1a2332] border border-red-500/30 focus:border-red-500 px-4 py-3 text-white text-sm outline-none transition-all placeholder:text-gray-600 uppercase font-semibold"
+                />
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={sendMessage}
+                  disabled={!message.trim()}
+                  className="bg-red-500 hover:bg-red-600 disabled:bg-red-500/30 text-white px-4 py-3 transition-all"
+                >
+                  <Send size={18} />
+                </motion.button>
+              </div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -127,4 +152,4 @@ const ChatSidebar = () => {
   );
 };
 
-export default ChatSidebar;
+export default memo(ChatSidebar);

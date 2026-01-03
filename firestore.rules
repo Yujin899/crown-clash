@@ -1,0 +1,96 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isSignedIn() { 
+      return request.auth != null; 
+    }
+    
+    function isOwner(userId) { 
+      return isSignedIn() && request.auth.uid == userId; 
+    }
+    
+    function isAdmin() {
+      return isSignedIn() && 
+        exists(/databases/$(database)/documents/players/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/players/$(request.auth.uid)).data.isAdmin == true;
+    }
+
+    // === 1. Players ===
+    match /players/{userId} {
+      allow read: if isSignedIn();
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // === 2. Subjects (with subcollections) ===
+    match /subjects/{subjectId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+      
+      // Quizzes subcollection
+      match /quizzes/{quizId} {
+        allow read: if isSignedIn();
+        allow write: if isAdmin();
+        
+        // Questions subcollection
+        match /questions/{questionId} {
+          allow read: if isSignedIn();
+          allow write: if isAdmin();
+        }
+      }
+    }
+
+    // === 3. Legacy Collections (for backward compatibility during migration) ===
+    // These can be removed after migration is complete
+    match /quizzes/{id} { 
+      allow read: if isSignedIn(); 
+      allow write: if isAdmin(); 
+    }
+    
+    match /questions/{id} { 
+      allow read: if isSignedIn(); 
+      allow write: if isAdmin(); 
+    }
+
+    // === 4. Note: friend_requests and game_invites moved to Realtime Database ===
+    // No Firestore rules needed for these anymore
+  }
+}
+
+// ============================================
+// REALTIME DATABASE RULES (Copy to Realtime Database Rules)
+// ============================================
+/*
+{
+  "rules": {
+    "friendRequests": {
+      "$userId": {
+        ".read": "$userId === auth.uid",
+        ".write": "$userId === auth.uid",
+        "$requestId": {
+          ".write": "auth != null"
+        }
+      }
+    },
+    "gameInvites": {
+      "$userId": {
+        ".read": "$userId === auth.uid",
+        ".write": "auth != null",
+        "$inviteId": {
+          ".read": "$userId === auth.uid",
+          ".write": "auth != null"
+        }
+      }
+    },
+    "games": {
+      "$gameId": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    }
+  }
+}
+*/

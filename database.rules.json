@@ -1,0 +1,31 @@
+{
+  "rules": {
+    "friendRequests": {
+      "$userId": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    
+    "gameInvites": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    
+    "games": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    
+    "globalChat": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    
+    "presence": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    }
+  }
+}
+

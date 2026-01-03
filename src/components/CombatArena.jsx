@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { EffectCards } from 'swiper/modules';
-import { Shield, Zap, Crosshair, CheckCircle } from 'lucide-react';
+import { Shield, Zap, Crosshair, CheckCircle, Target } from 'lucide-react';
 import 'swiper/css';
 import 'swiper/css/effect-cards';
 
@@ -15,49 +15,79 @@ const CombatArena = ({
 }) => {
   return (
     <div className={`absolute inset-0 flex items-center justify-center z-10 ${didShoot ? 'animate-recoil' : ''}`}>
-        <div className="w-[350px] h-[550px] md:w-[400px] md:h-[600px] perspective-1000">
-            <Swiper effect={'cards'} grabCursor={true} modules={[EffectCards]} className="w-full h-full">
+        <div className="w-[300px] h-[520px] sm:w-[340px] sm:h-[560px] md:w-[420px] md:h-[640px] perspective-1000">
+            <Swiper 
+                effect={'cards'} 
+                grabCursor={true} 
+                modules={[EffectCards]} 
+                className="w-full h-full"
+                speed={300}
+                allowTouchMove={false} // Disable Swipe to enforce answering
+            >
                 
                 {/* 1. QUESTIONS CARDS */}
                 {questions.map((q, qIndex) => (
-                <SwiperSlide key={qIndex} className="bg-transparent rounded-2xl">
-                    <div className="w-full h-full bg-[#0b0f1a] rounded-2xl border-2 border-cyan-500/30 p-6 flex flex-col shadow-2xl relative overflow-hidden backdrop-blur-md">
+                <SwiperSlide key={qIndex} className="bg-transparent">
+                    {/* VALORANT CARD STYLE */}
+                    <div className="w-full h-full bg-[#111823] border border-white/10 relative overflow-hidden group clip-path-notch">
+                        
                         {/* Status Icon */}
                         {myAnswers[qIndex] && (
-                            <div className="absolute top-4 right-4 animate-bounce">
-                                <CheckCircle className="text-green-400 drop-shadow-[0_0_10px_rgba(74,222,128,0.5)]" size={28} />
+                            <div className="absolute top-0 right-0 p-4 z-20">
+                                <CheckCircle className="text-cyan-400 fill-cyan-400/20" size={28} />
                             </div>
                         )}
                         
+                        {/* Decorative background elements */}
+                        <div className="absolute top-0 left-0 w-2 h-16 bg-cyan-500"></div>
+                        <div className="absolute bottom-0 right-0 w-2 h-16 bg-white/20"></div>
+                        <div className="absolute top-[10%] right-[10%] w-[80%] h-[1px] bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
+                        
                         {/* Header */}
-                        <div className="flex justify-between text-cyan-400 mb-6 border-b border-white/5 pb-4 mt-2">
-                            <Shield size={20} />
-                            <span className="text-xs font-bold tracking-[0.3em]">TARGET_LOCK_{qIndex + 1}</span>
-                            <Zap size={20} className="text-yellow-400" />
+                        <div className="flex justify-between items-center px-6 py-6 border-b border-white/5 relative z-10">
+                            <div className="flex items-center gap-2">
+                                <div className="w-2 h-2 bg-cyan-500 rotate-45"></div>
+                                <span className="text-xs font-bold tracking-[0.2em] text-cyan-400">TARGET_{qIndex + 1}</span>
+                            </div>
+                            <div className="flex gap-1">
+                                {[...Array(3)].map((_, i) => (
+                                    <div key={i} className="w-1 h-3 bg-white/10 skew-x-[-15deg]"></div>
+                                ))}
+                            </div>
                         </div>
 
                         {/* Question Text */}
-                        <h3 className="text-xl md:text-2xl font-bold text-center mb-6 flex-1 flex items-center justify-center text-white drop-shadow-md">
-                            {q.text}
-                        </h3>
+                        <div className="flex-1 flex items-center justify-center px-6 py-4 relative z-10">
+                            <h3 className="text-lg md:text-2xl font-bold text-center text-white leading-tight drop-shadow-lg">
+                                {q.question}
+                            </h3>
+                        </div>
 
                         {/* Options */}
-                        <div className="space-y-3 mb-4">
+                        <div className="px-6 pb-8 space-y-3">
                             {q.options.map((opt, idx) => {
                                 const isSelected = myAnswers[qIndex] === opt;
                                 return (
                                     <button 
                                         key={idx} 
                                         onClick={() => onAnswer(qIndex, opt)} 
-                                        className={`w-full p-4 rounded-xl border text-left font-bold transition-all duration-200 flex justify-between items-center group
+                                        className={`w-full p-4 border transition-all duration-200 flex justify-between items-center group/btn relative overflow-hidden
                                             ${isSelected 
-                                                ? 'bg-cyan-600 border-cyan-400 text-white shadow-[0_0_15px_rgba(8,145,178,0.5)]' 
-                                                : 'bg-white/5 border-white/10 hover:bg-white/10 text-gray-400 hover:text-white hover:border-white/30'
+                                                ? 'bg-cyan-500/20 border-cyan-500 text-white' 
+                                                : 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/30 text-gray-400 hover:text-white'
                                             }
                                         `}
+                                        style={{ clipPath: 'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)' }}
                                     >
-                                        <span className="group-hover:translate-x-1 transition-transform">{opt}</span>
-                                        {isSelected && <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>}
+                                        {/* Hover fill effect */}
+                                        <div className="absolute inset-0 bg-white/5 translate-x-[-100%] group-hover/btn:translate-x-0 transition-transform duration-300"></div>
+                                        
+                                        <span className="relative z-10 font-bold tracking-wide text-sm md:text-base flex items-center gap-3">
+                                            <span className="text-[10px] font-mono opacity-50">0{idx + 1} //</span>
+                                            {opt}
+                                        </span>
+                                        
+                                        {isSelected && <div className="w-2 h-2 bg-cyan-400 rotate-45 animate-pulse"></div>}
                                     </button>
                                 );
                             })}
@@ -67,48 +97,54 @@ const CombatArena = ({
                 ))}
 
                 {/* 2. THE KILL CARD (LAST SLIDE) */}
-                <SwiperSlide className="bg-transparent rounded-2xl">
-                    <div className={`w-full h-full bg-[#050505] rounded-2xl border-4 flex flex-col items-center justify-center shadow-2xl relative overflow-hidden transition-all duration-500 
+                <SwiperSlide className="bg-transparent">
+                    <div className={`w-full h-full bg-[#080808] border-2 flex flex-col items-center justify-center relative overflow-hidden transition-all duration-500 clip-path-notch
                         ${killMode 
-                            ? 'border-red-600 shadow-[inset_0_0_50px_rgba(220,38,38,0.2)]' 
-                            : 'border-gray-800 opacity-80'
+                            ? 'border-red-600 shadow-[0_0_30px_rgba(220,38,38,0.3)]' 
+                            : 'border-white/10 opacity-80'
                         }`}
                     >
                         {killMode ? (
-                            <div className="text-center z-10 w-full px-6">
-                                {/* Ready State */}
-                                <div className="animate-[pulse_0.5s_infinite] mb-8 relative inline-block">
-                                    <Crosshair size={100} className="text-red-500" />
-                                    <div className="absolute inset-0 bg-red-500 blur-xl opacity-40 animate-ping"></div>
+                            <div className="text-center z-10 w-full px-8 relative">
+                                {/* Animated decorations */}
+                                <div className="absolute top-0 left-0 w-full h-full pointer-events-none">
+                                    <div className="absolute top-10 left-10 w-4 h-4 border-l-2 border-t-2 border-red-600"></div>
+                                    <div className="absolute top-10 right-10 w-4 h-4 border-r-2 border-t-2 border-red-600"></div>
+                                    <div className="absolute bottom-10 left-10 w-4 h-4 border-l-2 border-b-2 border-red-600"></div>
+                                    <div className="absolute bottom-10 right-10 w-4 h-4 border-r-2 border-b-2 border-red-600"></div>
+                                </div>
+
+                                {/* Crosshair */}
+                                <div className="mb-8 relative inline-flex items-center justify-center">
+                                    <Crosshair size={100} className="text-red-500 animate-[spin_10s_linear_infinite]" />
+                                    <div className="absolute inset-0 bg-red-500/20 blur-xl animate-pulse"></div>
+                                    <Target size={40} className="text-white absolute" />
                                 </div>
                                 
-                                <h2 className="text-5xl font-black text-white uppercase tracking-tighter mb-2 glitch-text">EXECUTE</h2>
-                                <p className="text-red-400 text-xs font-mono mb-10 tracking-widest border border-red-900/50 bg-red-900/20 p-2 rounded">
-                                    SYSTEM READY // AWAITING COMMAND
-                                </p>
+                                <h2 className="text-5xl font-black text-white uppercase tracking-tighter mb-2 glitch-text">ELIMINATE</h2>
+                                <p className="text-red-500 font-mono text-xs tracking-[0.5em] mb-12 uppercase">Target Vulnerable</p>
                                 
                                 <button 
                                     onClick={onKill} 
-                                    className="w-full bg-red-600 hover:bg-red-500 text-white text-3xl font-black py-8 rounded-xl shadow-[0_0_50px_rgba(220,38,38,0.6)] hover:scale-105 active:scale-95 transition-all skew-x-[-5deg]"
+                                    className="w-full bg-red-600 hover:bg-red-500 text-white text-2xl font-black py-6 clip-path-button hover:translate-y-[-2px] active:translate-y-[1px] transition-all shadow-[0_10px_20px_rgba(220,38,38,0.4)] relative overflow-hidden group"
                                 >
-                                    FIRE
+                                    <span className="relative z-10 flex items-center justify-center gap-4">
+                                        <Crosshair size={28} />
+                                        EXECUTE
+                                    </span>
+                                    {/* Scanline effect on button */}
+                                    <div className="absolute inset-0 bg-white/20 -translate-y-[100%] group-hover:translate-y-[100%] transition-transform duration-500"></div>
                                 </button>
                             </div>
                         ) : (
-                            // Locked State
-                            <div className="text-center opacity-40 p-4">
-                                <Shield size={80} className="text-gray-500 mx-auto mb-6" />
-                                <h2 className="text-3xl font-black text-gray-400 uppercase tracking-widest">LOCKED</h2>
-                                <p className="text-gray-500 text-sm mt-4 font-mono">COMPLETE ALL TARGETS TO UNLOCK ULTIMATE</p>
+                            <div className="text-center opacity-30">
+                                <Shield size={64} className="mx-auto mb-4 text-white" />
+                                <h3 className="text-2xl font-black uppercase tracking-widest text-white">LOCKED</h3>
+                                <p className="font-mono text-xs mt-2">COMPLETE OBJECTIVES</p>
                             </div>
                         )}
-                        
-                        {/* Decor lines */}
-                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-red-900 to-transparent"></div>
-                        <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-red-900 to-transparent"></div>
                     </div>
                 </SwiperSlide>
-
             </Swiper>
         </div>
         
@@ -124,4 +160,13 @@ const CombatArena = ({
   );
 };
 
-export default CombatArena;
+// Memoize to prevent unnecessary re-renders
+export default memo(CombatArena, (prevProps, nextProps) => {
+    // Only re-render if these specific props change
+    return (
+        prevProps.myAnswers === nextProps.myAnswers &&
+        prevProps.killMode === nextProps.killMode &&
+        prevProps.didShoot === nextProps.didShoot &&
+        prevProps.questions === nextProps.questions
+    );
+});
