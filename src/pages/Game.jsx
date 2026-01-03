@@ -144,7 +144,6 @@ const Game = () => {
       <GameHUD
         myPlayer={myPlayer}
         enemyPlayer={enemyPlayer || null}
-        timer={combatTimer}
         myProgress={game.questions?.length ? (Object.keys(myAnswers).length / game.questions.length) * 100 : 0}
         enemyProgress={enemyPlayer?.progress || 0}
         isSolo={isSoloMode}

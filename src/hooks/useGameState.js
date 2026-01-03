@@ -83,72 +83,22 @@ export const useGameState = (roomId, user, navigate) => {
     };
   }, [roomId, user, navigate, myId, enemyId]);
 
-  // Start game logic
+  // Start game logic - No timer needed
   useEffect(() => {
     if (!processingRef.current) {
       processingRef.current = true;
     }
 
-    // Solo mode: start immediately, no overlay, no timer
-    if (isSoloMode) {
-      setIsOverlayVisible(false);
-      if (isHost && roomId) {
-        update(ref(rtdb, `games/${roomId}`), { 
-          state: 'combat'
-        }).catch(e => console.log("Lag"));
-      }
-      return;
-    }
-
-    // Multiplayer mode: normal flow with overlay and timer
-    const safeStartTimer = setTimeout(() => {
-      setIsOverlayVisible(false);
-      
-      const futureTime = Date.now() + 180000;
-      setLocalEndTime(futureTime);
-
-      if (isHost && roomId) {
-        update(ref(rtdb, `games/${roomId}`), { 
-          state: 'combat', 
-          endTime: futureTime 
-        }).catch(e => console.log("Lag"));
-      }
-    }, 5500);
-
-    return () => clearTimeout(safeStartTimer);
-  }, [isHost, roomId, isSoloMode]);
-
-  // Combat timer with optimized logic (disabled in solo mode)
-  useEffect(() => {
-    if (isSoloMode) return; // No timer in solo mode
+    // Both modes: start immediately, no timer
+    setIsOverlayVisible(false);
     
-    const shouldRun = (game?.state === 'combat') || (!isOverlayVisible && !game?.winner);
-    if (!shouldRun) return;
+    if (isHost && roomId) {
+      update(ref(rtdb, `games/${roomId}`), { 
+        state: 'combat'
+      }).catch(e => console.log("Lag"));
+    }
+  }, [isHost, roomId]);
 
-    const interval = setInterval(() => {
-      const now = Date.now();
-      let targetTime = game?.endTime;
-      
-      if (targetTime && targetTime < now) targetTime = null;
-      const finalTarget = targetTime || localEndTime;
-
-      if (finalTarget) {
-        const diff = finalTarget - now;
-        const seconds = Math.ceil(diff / 1000);
-        setCombatTimer(seconds > 0 ? seconds : 0);
-
-        // Auto-end game on timeout (host only)
-        if (seconds <= 0 && isHost && !game.winner && roomId && game.state === 'combat') {
-          // Instead of instantly setting DRAW, use the checkWinner logic
-          checkWinner('timeout');
-        }
-      } else {
-        setCombatTimer(180);
-      }
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [game?.state, isHost, game?.endTime, localEndTime, isOverlayVisible, game?.winner, roomId, isSoloMode]);
 
   // Progress tracking
   useEffect(() => {
@@ -164,22 +114,9 @@ export const useGameState = (roomId, user, navigate) => {
       });
     }
 
-    // In solo mode: auto-finish game after last question
-    if (isSoloMode && total > 0 && answered === total && !game.winner) {
-      console.log('🎯 Solo mode: All questions answered, finishing game...');
-      // Calculate correct answers
-      let myCorrect = 0;
-      game.questions.forEach((q, idx) => {
-        if (myAnswers[idx] === q.correctAnswer) myCorrect++;
-      });
-      
-      // Directly finish game without kill mode
-      update(ref(rtdb, `games/${roomId}`), {
-        winner: myId,
-        reason: 'solo_complete',
-        state: 'finished',
-        soloScore: myCorrect
-      });
+    // Solo mode: Enable submit button when all questions answered (don't auto-finish)
+    if (isSoloMode && total > 0 && answered === total) {
+      setKillMode(true); // This enables the last card button
     } else if (!isSoloMode && total > 0 && answered === total) {
       setKillMode(true);
     }

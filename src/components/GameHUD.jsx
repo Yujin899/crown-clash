@@ -1,11 +1,8 @@
 import React, { memo, useMemo } from 'react';
 import { motion } from 'framer-motion';
 
-const GameHUD = ({ myPlayer, enemyPlayer, timer, myProgress, enemyProgress, isSolo }) => {
+const GameHUD = ({ myPlayer, enemyPlayer, myProgress, enemyProgress, isSolo }) => {
   
-  const formatTime = useMemo(() => (s) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`, []);
-  const isCriticalTime = timer <= 10;
-
   return (
     <div className="absolute top-0 w-full p-2 md:p-6 flex flex-col md:flex-row justify-between items-center md:items-start gap-2 md:gap-4 z-30 pointer-events-none select-none">
       
@@ -45,30 +42,6 @@ const GameHUD = ({ myPlayer, enemyPlayer, timer, myProgress, enemyProgress, isSo
            <span>SHIELD /// 50</span>
         </div>
       </div>
-
-      {/* TIMER (CENTER) - Hidden in solo mode */}
-      {!isSolo && (
-        <div className="absolute top-14 md:top-0 left-1/2 -translate-x-1/2 md:relative md:left-0 md:translate-x-0 order-first md:order-none flex flex-col items-center z-40">
-          {/* Timer Container */}
-          <div className="relative bg-[#1a2332]/90 border-x-2 border-red-500/50 px-4 md:px-6 py-1 backdrop-blur-sm clip-path-polygon transform scale-75 md:scale-100">
-            <div className={`text-3xl md:text-5xl font-black font-mono tracking-tighter 
-                ${isCriticalTime ? 'text-red-500 animate-pulse' : 'text-white'}`}
-            >
-              {formatTime(timer)}
-            </div>
-            
-            {/* Decorative lines */}
-            <div className="absolute top-0 left-0 w-full h-0.5 bg-red-500/20"></div>
-            <div className="absolute bottom-0 left-0 w-full h-0.5 bg-red-500/20"></div>
-          </div>
-          
-          {isCriticalTime && (
-            <div className="mt-1 px-4 py-0.5 bg-red-500 text-black font-black text-[10px] tracking-[0.2em] animate-pulse">
-              CRITICAL
-            </div>
-          )}
-        </div>
-      )}
 
       {/* ENEMY STATS (RIGHT) - Only show if not solo mode */}
       {enemyPlayer && (
@@ -111,7 +84,6 @@ const GameHUD = ({ myPlayer, enemyPlayer, timer, myProgress, enemyProgress, isSo
 // Memoize to prevent unnecessary re-renders
 export default memo(GameHUD, (prevProps, nextProps) => {
   return (
-    prevProps.timer === nextProps.timer &&
     prevProps.myProgress === nextProps.myProgress &&
     prevProps.enemyProgress === nextProps.enemyProgress &&
     prevProps.myPlayer === nextProps.myPlayer &&

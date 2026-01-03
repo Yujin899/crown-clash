@@ -212,8 +212,8 @@ const CombatArena = ({
                                                 className="w-full bg-red-600 hover:bg-red-500 text-white text-2xl font-black py-6 clip-path-button hover:translate-y-[-2px] active:translate-y-[1px] transition-all shadow-[0_10px_20px_rgba(220,38,38,0.4)] relative overflow-hidden group"
                                             >
                                                 <span className="relative z-10 flex items-center justify-center gap-4">
-                                                    <CheckCircle size={28} />
-                                                    VIEW DETAILS
+                                                    <Target size={28} />
+                                                    SUBMIT QUIZ
                                                 </span>
                                                 {/* Scanline effect on button */}
                                                 <div className="absolute inset-0 bg-white/20 -translate-y-[100%] group-hover:translate-y-[100%] transition-transform duration-500"></div>

@@ -167,9 +167,15 @@ const GameResultOverlay = ({ result, myPlayer, enemyPlayer, questions, earnedXP,
         {/* Result Title */}
         <div className="text-center mb-6 md:mb-8">
           <h1 className={`result-title text-6xl md:text-8xl lg:text-9xl font-black uppercase tracking-tight mb-3 ${
-            isVictory ? 'text-green-500' : isDraw ? 'text-yellow-500' : 'text-red-500'
+            isSolo 
+              ? (questions.length > 0 && (myCorrect / questions.length) >= 0.7 ? 'text-green-500' : 'text-red-500')
+              : (isVictory ? 'text-green-500' : isDraw ? 'text-yellow-500' : 'text-red-500')
           }`} style={{
-            textShadow: `0 0 30px ${isVictory ? 'rgba(34, 197, 94, 0.6)' : isDraw ? 'rgba(234, 179, 8, 0.6)' : 'rgba(239, 68, 68, 0.6)'}`
+            textShadow: isSolo
+              ? (questions.length > 0 && (myCorrect / questions.length) >= 0.7 
+                  ? '0 0 30px rgba(34, 197, 94, 0.6)' 
+                  : '0 0 30px rgba(239, 68, 68, 0.6)')
+              : `0 0 30px ${isVictory ? 'rgba(34, 197, 94, 0.6)' : isDraw ? 'rgba(234, 179, 8, 0.6)' : 'rgba(239, 68, 68, 0.6)'}`
           }}>
             {isSolo ? 'COMPLETE' : (isVictory ? 'VICTORY' : isDraw ? 'DRAW' : 'DEFEAT')}
           </h1>
@@ -376,23 +382,25 @@ const GameResultOverlay = ({ result, myPlayer, enemyPlayer, questions, earnedXP,
           <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-red-500 to-transparent"></div>
         </div>
 
-        {/* XP Badge */}
-        <div className="flex justify-center mb-6">
-          <div className="xp-badge relative bg-yellow-500 border-4 border-yellow-400 px-8 py-4">
-            <div className="flex items-center gap-3">
-              <Award size={32} className="text-yellow-900" />
-              <div>
-                <p className="text-yellow-900 text-xs uppercase font-bold tracking-wider">Experience Earned</p>
-                <p className="text-yellow-900 text-3xl font-black">
-                  +<span ref={xpCounterRef}>0</span> XP
-                </p>
+        {/* XP Badge - Only show for multiplayer */}
+        {!isSolo && (
+          <div className="flex justify-center mb-6">
+            <div className="xp-badge relative bg-yellow-500 border-4 border-yellow-400 px-8 py-4">
+              <div className="flex items-center gap-3">
+                <Award size={32} className="text-yellow-900" />
+                <div>
+                  <p className="text-yellow-900 text-xs uppercase font-bold tracking-wider">Experience Earned</p>
+                  <p className="text-yellow-900 text-3xl font-black">
+                    +<span ref={xpCounterRef}>0</span> XP
+                  </p>
+                </div>
               </div>
+              {/* Corner brackets */}
+              <div className="absolute -top-2 -left-2 w-4 h-4 border-l-2 border-t-2 border-yellow-300"></div>
+              <div className="absolute -bottom-2 -right-2 w-4 h-4 border-r-2 border-b-2 border-yellow-300"></div>
             </div>
-            {/* Corner brackets */}
-            <div className="absolute -top-2 -left-2 w-4 h-4 border-l-2 border-t-2 border-yellow-300"></div>
-            <div className="absolute -bottom-2 -right-2 w-4 h-4 border-r-2 border-b-2 border-yellow-300"></div>
           </div>
-        </div>
+        )}
 
         {/* Return Button */}
         <div className="flex justify-center">
