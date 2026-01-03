@@ -136,7 +136,10 @@ const GameResultOverlay = ({ result, myPlayer, enemyPlayer, questions, earnedXP,
       <div className={`result-flash absolute inset-0 ${isVictory ? 'bg-green-500' : isDraw ? 'bg-yellow-500' : 'bg-red-500'}`}></div>
 
       {/* Background */}
-      <div className={`absolute inset-0 ${isVictory ? 'bg-[#0a1f0f]' : isDraw ? 'bg-[#1f1a0a]' : 'bg-[#1f0a0a]'}`}>
+      <div className="absolute inset-0 bg-[#0f1923]">
+        {/* Color Tint */}
+        <div className={`absolute inset-0 opacity-30 ${isVictory ? 'bg-green-900' : isDraw ? 'bg-yellow-900' : 'bg-red-900'}`}></div>
+
         {/* Scanlines */}
         <div className="absolute inset-0 opacity-[0.05]" style={{
           backgroundImage: `linear-gradient(rgba(239,68,68,0.8) 1px, transparent 1px)`,

@@ -169,33 +169,33 @@ const GameStartOverlay = ({ myPlayer, enemyPlayer, countdown: initialCountdown =
       <div className="corner-bracket absolute bottom-8 right-8 w-20 h-20 border-r-4 border-b-4 border-red-500"></div>
 
       {/* Main content */}
-      <div className="relative z-10 w-full max-w-6xl px-4">
-        <div className="flex items-center justify-between gap-8">
+      <div className="relative z-10 w-full max-w-6xl px-4 flex flex-col items-center justify-center min-h-screen py-10">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-8 md:gap-12 w-full">
           
           {/* Left Player Card */}
-          <div className="player-card-left flex-1 max-w-md">
-            <div className="relative bg-[#1a2332] border-2 border-red-500 p-6 overflow-hidden">
+          <div className="player-card-left flex-1 w-full max-w-sm md:max-w-md mx-auto">
+            <div className="relative bg-[#1a2332] border-2 border-red-500 p-4 md:p-6 overflow-hidden">
               {/* Glow effect */}
               <div className="absolute inset-0 bg-red-500/5"></div>
               
               <div className="relative z-10">
                 {/* Player avatar */}
                 {myPlayer?.avatar?.url ? (
-                  <div className="w-32 h-32 mx-auto mb-4 border-4 border-red-500 relative">
+                  <div className="w-24 h-24 md:w-32 md:h-32 mx-auto mb-4 border-4 border-red-500 relative">
                     <img src={myPlayer.avatar.url} alt="" className="w-full h-full object-cover" />
                     <div className="absolute -top-2 -left-2 w-4 h-4 border-l-2 border-t-2 border-red-500"></div>
                     <div className="absolute -bottom-2 -right-2 w-4 h-4 border-r-2 border-b-2 border-red-500"></div>
                   </div>
                 ) : (
-                  <div className="w-32 h-32 mx-auto mb-4 bg-red-500/20 border-4 border-red-500 flex items-center justify-center">
+                  <div className="w-24 h-24 md:w-32 md:h-32 mx-auto mb-4 bg-red-500/20 border-4 border-red-500 flex items-center justify-center">
                     <Swords size={48} className="text-red-500" />
                   </div>
                 )}
                 
-                <h3 className="text-2xl font-black uppercase text-center text-white mb-2">
+                <h3 className="text-xl md:text-2xl font-black uppercase text-center text-white mb-2 truncate">
                   {myPlayer?.name || 'YOU'}
                 </h3>
-                <p className="text-red-500 text-xs uppercase tracking-[0.2em] text-center font-bold">
+                <p className="text-red-500 text-[10px] md:text-xs uppercase tracking-[0.2em] text-center font-bold">
                   {myPlayer?.avatar?.role || 'AGENT'}
                 </p>
               </div>
@@ -207,52 +207,52 @@ const GameStartOverlay = ({ myPlayer, enemyPlayer, countdown: initialCountdown =
           </div>
 
           {/* VS Badge */}
-          <div ref={vsRef} className="relative flex-shrink-0">
+          <div ref={vsRef} className="relative flex-shrink-0 my-4 md:my-0">
             {/* Glow effect */}
             <div className="vs-glow absolute inset-0 bg-red-500 blur-3xl opacity-50 scale-150"></div>
             
-            <div className="relative w-32 h-32 bg-[#1a2332] border-4 border-red-500 flex items-center justify-center">
-              <Swords size={48} className="vs-icon text-red-500" />
+            <div className="relative w-20 h-20 md:w-32 md:h-32 bg-[#1a2332] border-4 border-red-500 flex items-center justify-center">
+              <Swords size={32} className="vs-icon text-red-500 md:w-12 md:h-12" />
               
               {/* Pulsing rings */}
               <div className="absolute inset-0 border-2 border-red-500 animate-ping opacity-20"></div>
               
               {/* Corner brackets */}
-              <div className="absolute -top-2 -left-2 w-6 h-6 border-l-4 border-t-4 border-red-500"></div>
-              <div className="absolute -top-2 -right-2 w-6 h-6 border-r-4 border-t-4 border-red-500"></div>
-              <div className="absolute -bottom-2 -left-2 w-6 h-6 border-l-4 border-b-4 border-red-500"></div>
-              <div className="absolute -bottom-2 -right-2 w-6 h-6 border-r-4 border-b-4 border-red-500"></div>
+              <div className="absolute -top-2 -left-2 w-4 h-4 md:w-6 md:h-6 border-l-4 border-t-4 border-red-500"></div>
+              <div className="absolute -top-2 -right-2 w-4 h-4 md:w-6 md:h-6 border-r-4 border-t-4 border-red-500"></div>
+              <div className="absolute -bottom-2 -left-2 w-4 h-4 md:w-6 md:h-6 border-l-4 border-b-4 border-red-500"></div>
+              <div className="absolute -bottom-2 -right-2 w-4 h-4 md:w-6 md:h-6 border-r-4 border-b-4 border-red-500"></div>
             </div>
 
-            <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 bg-red-500 px-6 py-2 whitespace-nowrap">
-              <span className="text-white font-black text-lg tracking-[0.3em] uppercase">VS</span>
+            <div className="absolute -bottom-6 md:-bottom-8 left-1/2 -translate-x-1/2 bg-red-500 px-4 md:px-6 py-1 md:py-2 whitespace-nowrap">
+              <span className="text-white font-black text-sm md:text-lg tracking-[0.3em] uppercase">VS</span>
             </div>
           </div>
 
           {/* Right Player Card */}
-          <div className="player-card-right flex-1 max-w-md">
-            <div className="relative bg-[#1a2332] border-2 border-red-500 p-6 overflow-hidden">
+          <div className="player-card-right flex-1 w-full max-w-sm md:max-w-md mx-auto">
+            <div className="relative bg-[#1a2332] border-2 border-red-500 p-4 md:p-6 overflow-hidden">
               {/* Glow effect */}
               <div className="absolute inset-0 bg-red-500/5"></div>
               
               <div className="relative z-10">
                 {/* Player avatar */}
                 {enemyPlayer?.avatar?.url ? (
-                  <div className="w-32 h-32 mx-auto mb-4 border-4 border-red-500 relative">
+                  <div className="w-24 h-24 md:w-32 md:h-32 mx-auto mb-4 border-4 border-red-500 relative">
                     <img src={enemyPlayer.avatar.url} alt="" className="w-full h-full object-cover" />
                     <div className="absolute -top-2 -left-2 w-4 h-4 border-l-2 border-t-2 border-red-500"></div>
                     <div className="absolute -bottom-2 -right-2 w-4 h-4 border-r-2 border-b-2 border-red-500"></div>
                   </div>
                 ) : (
-                  <div className="w-32 h-32 mx-auto mb-4 bg-red-500/20 border-4 border-red-500 flex items-center justify-center">
+                  <div className="w-24 h-24 md:w-32 md:h-32 mx-auto mb-4 bg-red-500/20 border-4 border-red-500 flex items-center justify-center">
                     <Swords size={48} className="text-red-500" />
                   </div>
                 )}
                 
-                <h3 className="text-2xl font-black uppercase text-center text-white mb-2">
+                <h3 className="text-xl md:text-2xl font-black uppercase text-center text-white mb-2 truncate">
                   {enemyPlayer?.name || 'OPPONENT'}
                 </h3>
-                <p className="text-red-500 text-xs uppercase tracking-[0.2em] text-center font-bold">
+                <p className="text-red-500 text-[10px] md:text-xs uppercase tracking-[0.2em] text-center font-bold">
                   {enemyPlayer?.avatar?.role || 'AGENT'}
                 </p>
               </div>

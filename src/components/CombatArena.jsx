@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import React, { memo, useRef, useState } from 'react';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { EffectCards } from 'swiper/modules';
 import { Shield, Zap, Crosshair, CheckCircle, Target } from 'lucide-react';
@@ -13,23 +13,32 @@ const CombatArena = ({
     onKill, 
     didShoot 
 }) => {
+  const swiperRef = useRef(null);
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  // Check if current question is answered
+  const isCurrentAnswered = myAnswers[activeIndex] !== undefined;
+
   return (
     <div className={`absolute inset-0 flex items-center justify-center z-10 ${didShoot ? 'animate-recoil' : ''}`}>
         <div className="w-[300px] h-[520px] sm:w-[340px] sm:h-[560px] md:w-[420px] md:h-[640px] perspective-1000">
             <Swiper 
+                onSwiper={(swiper) => swiperRef.current = swiper}
+                onSlideChange={(swiper) => setActiveIndex(swiper.activeIndex)}
                 effect={'cards'} 
                 grabCursor={true} 
                 modules={[EffectCards]} 
                 className="w-full h-full"
                 speed={300}
-                allowTouchMove={false} // Disable Swipe to enforce answering
+                allowTouchMove={true}
+                allowSlideNext={isCurrentAnswered || activeIndex >= questions.length}
             >
                 
                 {/* 1. QUESTIONS CARDS */}
                 {questions.map((q, qIndex) => (
                 <SwiperSlide key={qIndex} className="bg-transparent">
                     {/* VALORANT CARD STYLE */}
-                    <div className="w-full h-full bg-[#111823] border border-white/10 relative overflow-hidden group clip-path-notch">
+                    <div className="w-full h-full bg-[#1a2332] border border-white/10 relative overflow-hidden group clip-path-notch">
                         
                         {/* Status Icon */}
                         {myAnswers[qIndex] && (

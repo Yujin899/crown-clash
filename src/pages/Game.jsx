@@ -104,7 +104,7 @@ const Game = () => {
 
   // Main game view
   return (
-    <div className={`h-screen text-white overflow-hidden relative font-sans transition-colors duration-300 ${isShot ? 'bg-red-900' : 'bg-[#02040a]'}`}>
+    <div className={`h-screen text-white overflow-hidden relative font-sans transition-colors duration-300 ${isShot ? 'bg-red-900' : 'bg-[#0f1923]'}`}>
       
       {/* Kill Animation Layer */}
       {animationType && (

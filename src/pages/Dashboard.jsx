@@ -195,6 +195,12 @@ const Dashboard = () => {
   }, []);
 
   const sendFriendRequest = useCallback(async (targetPlayer) => {
+    // Check if already friends
+    if (userData?.friends?.includes(targetPlayer.uid)) {
+      toast.error('ALREADY ALLIES');
+      return;
+    }
+
     try {
       const requestId = push(ref(rtdb, `friendRequests/${targetPlayer.uid}`)).key;
       const requestData = {

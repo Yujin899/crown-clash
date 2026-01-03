@@ -21,7 +21,9 @@ service cloud.firestore {
     match /players/{userId} {
       allow read: if isSignedIn();
       allow create: if isOwner(userId);
-      allow update: if isOwner(userId) || isAdmin();
+      // Allow owner/admin update, OR allow adding to friends list (two-way acceptance)
+      allow update: if isOwner(userId) || isAdmin() || 
+                   (isSignedIn() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['friends']));
       allow delete: if isAdmin();
     }
 
@@ -60,37 +62,3 @@ service cloud.firestore {
   }
 }
 
-// ============================================
-// REALTIME DATABASE RULES (Copy to Realtime Database Rules)
-// ============================================
-/*
-{
-  "rules": {
-    "friendRequests": {
-      "$userId": {
-        ".read": "$userId === auth.uid",
-        ".write": "$userId === auth.uid",
-        "$requestId": {
-          ".write": "auth != null"
-        }
-      }
-    },
-    "gameInvites": {
-      "$userId": {
-        ".read": "$userId === auth.uid",
-        ".write": "auth != null",
-        "$inviteId": {
-          ".read": "$userId === auth.uid",
-          ".write": "auth != null"
-        }
-      }
-    },
-    "games": {
-      "$gameId": {
-        ".read": "auth != null",
-        ".write": "auth != null"
-      }
-    }
-  }
-}
-*/

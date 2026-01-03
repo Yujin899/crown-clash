@@ -172,7 +172,7 @@ const KillAnimation = ({ mode, enemyAvatar, onComplete }) => {
   }, [mode, onComplete]);
 
   return (
-    <div ref={containerRef} className="fixed inset-0 z-[200] bg-black flex items-center justify-center overflow-hidden">
+    <div ref={containerRef} className="fixed inset-0 z-[200] bg-[#0f1923] flex items-center justify-center overflow-hidden">
       
       {/* Muzzle flash */}
       <div className="muzzle-flash absolute inset-0 bg-white opacity-0 pointer-events-none z-50"></div>
