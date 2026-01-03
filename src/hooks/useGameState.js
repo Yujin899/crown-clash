@@ -22,6 +22,7 @@ export const useGameState = (roomId, user, navigate) => {
   const animationShownRef = useRef(false); // Track if animation already shown
 
   const myId = user?.uid;
+  const isSoloMode = game?.isSolo === true;
   const enemyId = game?.players ? Object.keys(game.players).find(id => id !== myId) : null;
   const myPlayer = game?.players?.[myId];
   const enemyPlayer = game?.players?.[enemyId];
@@ -88,8 +89,21 @@ export const useGameState = (roomId, user, navigate) => {
       processingRef.current = true;
     }
 
+    // Solo mode: start immediately, no overlay, no timer
+    if (isSoloMode) {
+      setIsOverlayVisible(false);
+      if (isHost && roomId) {
+        update(ref(rtdb, `games/${roomId}`), { 
+          state: 'combat'
+        }).catch(e => console.log("Lag"));
+      }
+      return;
+    }
+
+    // Multiplayer mode: normal flow with overlay and timer
     const safeStartTimer = setTimeout(() => {
       setIsOverlayVisible(false);
+      
       const futureTime = Date.now() + 180000;
       setLocalEndTime(futureTime);
 
@@ -102,10 +116,12 @@ export const useGameState = (roomId, user, navigate) => {
     }, 5500);
 
     return () => clearTimeout(safeStartTimer);
-  }, [isHost, roomId]);
+  }, [isHost, roomId, isSoloMode]);
 
-  // Combat timer with optimized logic
+  // Combat timer with optimized logic (disabled in solo mode)
   useEffect(() => {
+    if (isSoloMode) return; // No timer in solo mode
+    
     const shouldRun = (game?.state === 'combat') || (!isOverlayVisible && !game?.winner);
     if (!shouldRun) return;
 
@@ -132,7 +148,7 @@ export const useGameState = (roomId, user, navigate) => {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [game?.state, isHost, game?.endTime, localEndTime, isOverlayVisible, game?.winner, roomId]);
+  }, [game?.state, isHost, game?.endTime, localEndTime, isOverlayVisible, game?.winner, roomId, isSoloMode]);
 
   // Progress tracking
   useEffect(() => {
@@ -148,10 +164,26 @@ export const useGameState = (roomId, user, navigate) => {
       });
     }
 
-    if (total > 0 && answered === total) {
+    // In solo mode: auto-finish game after last question
+    if (isSoloMode && total > 0 && answered === total && !game.winner) {
+      console.log('🎯 Solo mode: All questions answered, finishing game...');
+      // Calculate correct answers
+      let myCorrect = 0;
+      game.questions.forEach((q, idx) => {
+        if (myAnswers[idx] === q.correctAnswer) myCorrect++;
+      });
+      
+      // Directly finish game without kill mode
+      update(ref(rtdb, `games/${roomId}`), {
+        winner: myId,
+        reason: 'solo_complete',
+        state: 'finished',
+        soloScore: myCorrect
+      });
+    } else if (!isSoloMode && total > 0 && answered === total) {
       setKillMode(true);
     }
-  }, [myAnswers, game, myId, myPlayer, roomId]);
+  }, [myAnswers, game, myId, myPlayer, roomId, isSoloMode]);
 
   // ⭐ IMPROVED: Answer handler with ANTI-SPAM detection
   const handleAnswer = useCallback(async (qIndex, option) => {
@@ -276,12 +308,12 @@ export const useGameState = (roomId, user, navigate) => {
     }).catch(() => {});
   }, [hasUpdatedXP, user?.uid, game?.questions, myPlayer]);
 
-  // Trigger kill/backfire animation for both players when game ends
+  // Trigger kill/backfire animation for both players when game ends (disabled for solo mode)
   useEffect(() => {
-    if (!game?.winner || animationType || game.winner === 'DRAW' || animationShownRef.current) return;
+    if (!game?.winner || animationType || game.winner === 'DRAW' || animationShownRef.current || isSoloMode) return;
     
-    // If game ended due to kill, backfire, or spam, show animation
-    // If game ended, show animation
+    // Solo mode: skip animation entirely
+    // Multiplayer: show animation
     if (game.reason) {
       console.log('🎯 Triggering animation:', { winner: game.winner, reason: game.reason, myId });
       
@@ -307,7 +339,7 @@ export const useGameState = (roomId, user, navigate) => {
         setIsShot(true);
       }
     }
-  }, [game?.winner, game?.reason, animationType, myId]);
+  }, [game?.winner, game?.reason, animationType, myId, isSoloMode]);
 
   return {
     // State

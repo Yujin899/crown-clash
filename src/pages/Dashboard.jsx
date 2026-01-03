@@ -213,7 +213,7 @@ const Dashboard = () => {
   }, []);
 
   // Friend System Hook
-  const { sendFriendRequest, acceptFriendRequest, removeFriend, loading: friendSystemLoading } = useFriendSystem(user);
+  const { sendFriendRequest, acceptFriendRequest, declineFriendRequest, removeFriend, getFriendCount, loading: friendSystemLoading, FRIEND_LIMIT } = useFriendSystem(user);
   
   // Use the hook's removeFriend in the modal confirmation
   const handleConfirmDelete = async () => {
@@ -391,9 +391,8 @@ const Dashboard = () => {
                         Accept
                       </button>
                       <button
-                        onClick={async (e) => {
-                          e.stopPropagation();
-                          await remove(ref(rtdb, `friendRequests/${user.uid}/${req.id}`));
+                        onClick={() => {
+                          declineFriendRequest(req);
                           if (friendRequests.length === 1) setIsNotifOpen(false);
                         }}
                         className="flex-1 bg-transparent border border-red-500/50 hover:bg-red-500/10 text-red-500 text-xs font-bold py-2 px-3 uppercase transition-all"

@@ -50,7 +50,7 @@ const Lobby = () => {
     const ctx = gsap.context(() => {
       const tl = gsap.timeline();
 
-      if (mode === 'random') {
+      if (mode === 'solo') {
         // Scanning animation - check if elements exist
         const scannerLine = document.querySelector('.scanner-line');
         if (scannerLine) {
@@ -137,21 +137,18 @@ const Lobby = () => {
     }
   }, [status]);
 
-  // Random Mode
+  // Solo Practice Mode - Instant Start (no waiting)
   useEffect(() => {
-    if (mode !== 'random') return;
-    const matchTimer = setTimeout(async () => {
-      setStatus('found');
-      new Audio(inviteSfx).play().catch(() => {});
-      toast.success("TARGET ACQUIRED!");
-      
-      const roomId = `MATCH_${user.uid}_${Date.now()}`;
-      await createGameInRTDB(roomId, "BOT", { displayName: "Training Bot", avatar: null }, true);
-      
-      setTimeout(() => navigate(`/game/${roomId}`), 1000);
-    }, 3000);
-    return () => clearTimeout(matchTimer);
-  }, [mode]);
+    if (mode !== 'solo') return;
+    
+    const startSoloGame = async () => {
+      const roomId = `PRACTICE_${user.uid}_${Date.now()}`;
+      await createSoloPractice(roomId);
+      navigate(`/game/${roomId}`);
+    };
+    
+    startSoloGame();
+  }, [mode, user, navigate]); // Removed createSoloPractice from dependencies
 
   // Friend Mode
   useEffect(() => {
@@ -175,6 +172,62 @@ const Lobby = () => {
   useEffect(() => {
     if (waitingInviteId) new Audio(inviteSfx).play().catch(() => {});
   }, [waitingInviteId]);
+
+  const createSoloPractice = useCallback(async (roomId) => {
+    if (!quizId || !user) {
+      toast.error('NO QUIZ SELECTED');
+      return null;
+    }
+
+    try {
+      // SubjectId from URL params or location.state
+      if (!subjectId) {
+        toast.error('Subject information missing');
+        return null;
+      }
+
+      // Fetch questions from SUBCOLLECTION
+      const questionsRef = collection(db, `subjects/${subjectId}/quizzes/${quizId}/questions`);
+      const questionsSnap = await getDocs(questionsRef);
+      
+      if (questionsSnap.empty) {
+        toast.error('No questions found for this quiz');
+        return null;
+      }
+
+      const allQuestions = questionsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const selectedQuestions = allQuestions.sort(() => 0.5 - Math.random());
+
+      const userAvatar = user.photoURL ? { url: user.photoURL } : null;
+
+      const gameData = {
+        players: {
+          [user.uid]: {
+            name: user.displayName,
+            avatar: userAvatar,
+            score: 0,
+            progress: 0,
+            answers: {},
+            isHost: true,
+            connected: true,
+          },
+        },
+        questions: selectedQuestions,
+        state: 'starting', // Solo mode starts immediately
+        createdAt: Date.now(),
+        quizId,
+        hostId: user.uid,
+        isSolo: true, // Mark as solo practice
+      };
+
+      await set(dbRef(rtdb, `games/${roomId}`), gameData);
+      return roomId;
+    } catch (error) {
+      console.error('Solo practice creation error:', error);
+      toast.error('Failed to create practice session');
+      return null;
+    }
+  }, [quizId, user, subjectId]);
 
   const createGameInRTDB = useCallback(async (opponentId, accepted = false) => {
     if (!quizId || !user) {
@@ -416,7 +469,7 @@ const Lobby = () => {
       </AnimatePresence>
 
       {/* Main Content */}
-      {mode === 'random' ? (
+      {mode === 'solo' ? (
         <div className="text-center z-10 relative">
           {/* Scanner Display */}
           <div className="radar-pulse relative w-48 h-48 md:w-64 md:h-64 mx-auto mb-8">
@@ -433,11 +486,11 @@ const Lobby = () => {
           <div className="search-text">
             <div className="inline-block px-3 sm:px-4 py-1 mb-3 sm:mb-4 border border-red-500/30 bg-red-500/10">
               <span className="text-[10px] text-red-500 font-bold tracking-[0.3em] uppercase">
-                {status === 'searching' ? 'SCANNING NETWORK' : 'TARGET ACQUIRED'}
+                {status === 'searching' ? 'PREPARING QUIZ' : 'QUIZ READY'}
               </span>
             </div>
             <h2 className="text-xl sm:text-2xl md:text-4xl font-black tracking-wider uppercase text-white px-4">
-              {status === 'searching' ? 'FINDING OPPONENT' : 'MATCH CONFIRMED'}
+              {status === 'searching' ? 'LOADING QUESTIONS' : 'READY TO START'}
             </h2>
           </div>
         </div>

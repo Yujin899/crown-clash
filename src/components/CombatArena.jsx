@@ -13,7 +13,8 @@ const CombatArena = ({
     onAnswer, 
     killMode, 
     onKill, 
-    didShoot 
+    didShoot,
+    isSolo 
 }) => {
   const swiperRef = useRef(null);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -146,15 +147,84 @@ const CombatArena = ({
                 </SwiperSlide>
                 ))}
 
-                {/* 2. THE KILL CARD (LAST SLIDE) */}
+                {/* 2. THE LAST CARD - Results in Solo Mode, Kill Card in Multiplayer */}
                 <SwiperSlide key="kill-card" virtualIndex={questions.length} className="bg-transparent will-change-transform">
                     <div className={`w-full h-full bg-[#080808] border-2 flex flex-col items-center justify-center relative overflow-hidden transition-all duration-500 clip-path-notch
-                        ${killMode 
+                        ${killMode || isSolo
                             ? 'border-red-600 shadow-[0_0_30px_rgba(220,38,38,0.3)]' 
                             : 'border-white/10 opacity-80'
                         }`}
                     >
-                        {killMode ? (
+                        {isSolo ? (
+                            // SOLO MODE: Show Results
+                            <div className="text-center z-10 w-full px-8 relative">
+                                {(() => {
+                                    const myCorrect = questions.filter((q, idx) => myAnswers[idx] === q.correctAnswer).length;
+                                    const percentage = questions.length > 0 ? (myCorrect / questions.length) * 100 : 0;
+                                    
+                                    let message = '';
+                                    let messageColor = '';
+                                    let emoji = '';
+                                    
+                                    if (percentage >= 90) {
+                                        message = 'EXCELLENT!';
+                                        messageColor = 'text-green-400';
+                                        emoji = '🎯';
+                                    } else if (percentage >= 70) {
+                                        message = 'GOOD GAME!';
+                                        messageColor = 'text-blue-400';
+                                        emoji = '👍';
+                                    } else if (percentage >= 50) {
+                                        message = 'NOT BAD!';
+                                        messageColor = 'text-yellow-400';
+                                        emoji = '⚡';
+                                    } else {
+                                        message = 'HARD LUCK!';
+                                        messageColor = 'text-orange-400';
+                                        emoji = '💪';
+                                    }
+                                    
+                                    return (
+                                        <>
+                                            {/* Animated decorations */}
+                                            <div className="absolute top-0 left-0 w-full h-full pointer-events-none">
+                                                <div className="absolute top-10 left-10 w-4 h-4 border-l-2 border-t-2 border-red-600"></div>
+                                                <div className="absolute top-10 right-10 w-4 h-4 border-r-2 border-t-2 border-red-600"></div>
+                                                <div className="absolute bottom-10 left-10 w-4 h-4 border-l-2 border-b-2 border-red-600"></div>
+                                                <div className="absolute bottom-10 right-10 w-4 h-4 border-r-2 border-b-2 border-red-600"></div>
+                                            </div>
+
+                                            {/* Results Icon */}
+                                            <div className="mb-6 relative inline-flex items-center justify-center">
+                                                <CheckCircle size={100} className={`${messageColor} animate-pulse`} />
+                                                <div className={`absolute inset-0 ${messageColor.replace('text-', 'bg-')}/20 blur-xl`}></div>
+                                            </div>
+                                            
+                                            <h2 className={`text-4xl font-black uppercase tracking-tighter mb-2 ${messageColor}`}>
+                                                {emoji} {message}
+                                            </h2>
+                                            <p className="text-white font-mono text-sm tracking-[0.3em] mb-8 uppercase">
+                                                {myCorrect} / {questions.length} CORRECT
+                                            </p>
+                                            
+                                            <button 
+                                                onClick={onKill} 
+                                                className="w-full bg-red-600 hover:bg-red-500 text-white text-2xl font-black py-6 clip-path-button hover:translate-y-[-2px] active:translate-y-[1px] transition-all shadow-[0_10px_20px_rgba(220,38,38,0.4)] relative overflow-hidden group"
+                                            >
+                                                <span className="relative z-10 flex items-center justify-center gap-4">
+                                                    <CheckCircle size={28} />
+                                                    VIEW DETAILS
+                                                </span>
+                                                {/* Scanline effect on button */}
+                                                <div className="absolute inset-0 bg-white/20 -translate-y-[100%] group-hover:translate-y-[100%] transition-transform duration-500"></div>
+                                            </button>
+                                        </>
+                                    );
+                                })()}
+                            </div>
+                        ) : (
+                            // MULTIPLAYER MODE: Show Kill Card
+                            killMode ? (
                             <div className="text-center z-10 w-full px-8 relative">
                                 {/* Animated decorations */}
                                 <div className="absolute top-0 left-0 w-full h-full pointer-events-none">
@@ -192,6 +262,7 @@ const CombatArena = ({
                                 <h3 className="text-2xl font-black uppercase tracking-widest text-white">LOCKED</h3>
                                 <p className="font-mono text-xs mt-2">COMPLETE OBJECTIVES</p>
                             </div>
+                        )
                         )}
                     </div>
                 </SwiperSlide>

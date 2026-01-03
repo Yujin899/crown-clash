@@ -192,9 +192,9 @@ const SubjectModal = ({
                 </div>
                 
                 <div className="flex flex-col sm:flex-row gap-4 w-full justify-center quiz-item">
-                  {/* Random Mode */}
+                  {/* Solo Mode */}
                   <button 
-                    onClick={() => onModeSelection('random')} 
+                    onClick={() => onModeSelection('solo')} 
                     className="group relative flex-1 max-w-[220px] bg-red-500 hover:bg-red-600 p-6 transition-all overflow-hidden"
                   >
                     {/* Shine effect */}
@@ -202,7 +202,7 @@ const SubjectModal = ({
                     
                     <div className="relative z-10 flex flex-col items-center gap-2">
                       <Swords size={32} className="text-white" />
-                      <div className="font-black text-sm uppercase tracking-wider text-white">Random Match</div>
+                      <div className="font-black text-sm uppercase tracking-wider text-white">Solo Mode</div>
                     </div>
 
                     {/* Corner brackets */}

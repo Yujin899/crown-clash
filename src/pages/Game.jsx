@@ -52,8 +52,9 @@ const Game = () => {
     }
   }, []);
 
-  // Loading state
-  if (!game || !myPlayer || !enemyPlayer) {
+  // Loading state - adjusted for solo mode
+  const isSoloMode = game?.isSolo;
+  if (!game || !myPlayer || (!enemyPlayer && !isSoloMode)) {
     return (
       <div className="h-screen bg-black flex items-center justify-center text-white">
         <div className="flex flex-col items-center gap-4">
@@ -77,23 +78,18 @@ const Game = () => {
 
     return (
       <>
-        {isShot && (
-          <div className="fixed inset-0 z-[100] bg-red-600/40 backdrop-blur-sm pointer-events-none flex items-center justify-center animate-ping">
-            <div className="bg-black/50 p-10 rounded-full">
-              <Skull size={120} className="text-white" />
-            </div>
-          </div>
-        )}
+        {/* Skull animation removed per user request */}
         <div className="absolute inset-0 z-[50]">
           <GameResultOverlay
             result={isDraw ? 'draw' : (iWon ? 'victory' : 'defeat')}
             myPlayer={myPlayer}
-            enemyPlayer={enemyPlayer}
+            enemyPlayer={enemyPlayer || null}
             questions={game.questions || []}
             earnedXP={earnedXP}
-            reason={game.reason || 'normal'}
+            reason={game.reason || (isSoloMode ? 'practice' : 'normal')}
             myLocalAnswers={myAnswers}
             enemyLocalAnswers={game.players?.[enemyId]?.answers || {}}
+            isSolo={isSoloMode}
           />
         </div>
       </>
@@ -113,30 +109,33 @@ const Game = () => {
         />
       )}
 
-      {/* Start Overlay */}
-      <AnimatePresence mode='wait'>
-        {isOverlayVisible && (
-          <motion.div
-            key="overlay"
-            exit={{ opacity: 0, filter: "blur(20px)", transition: { duration: 0.8 } }}
-            className="absolute inset-0 z-[100]"
-          >
-            <GameStartOverlay
-              player={{
-                ...myPlayer,
-                avatarUrl: myPlayer.avatar?.url || `https://api.dicebear.com/9.x/avataaars/svg?seed=${myPlayer.name}`,
-                title: 'OPERATIVE'
-              }}
-              enemyPlayer={{
-                ...enemyPlayer,
-                avatarUrl: enemyPlayer.avatar?.url || `https://api.dicebear.com/9.x/avataaars/svg?seed=${enemyPlayer.name}`,
-                title: 'OPPONENT'
-              }}
-              countdown={4} // Pass static countdown or dynamic if tracked
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Start Overlay - Only for multiplayer */}
+      {!isSoloMode && (
+        <AnimatePresence mode='wait'>
+          {isOverlayVisible && (
+            <motion.div
+              key="overlay"
+              exit={{ opacity: 0, filter: "blur(20px)", transition: { duration: 0.8 } }}
+              className="absolute inset-0 z-[100]"
+            >
+              <GameStartOverlay
+                player={{
+                  ...myPlayer,
+                  avatarUrl: myPlayer.avatar?.url || `https://api.dicebear.com/9.x/avataaars/svg?seed=${myPlayer.name}`,
+                  title: 'OPERATIVE'
+                }}
+                enemyPlayer={enemyPlayer ? {
+                  ...enemyPlayer,
+                  avatarUrl: enemyPlayer.avatar?.url || `https://api.dicebear.com/9.x/avataaars/svg?seed=${enemyPlayer.name}`,
+                  title: 'OPPONENT'
+                } : null}
+                countdown={4}
+                isSolo={isSoloMode}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      )}
 
       {/* Background Grid */}
       <div className="absolute inset-0 z-0 bg-[linear-gradient(rgba(0,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(0,255,255,0.02)_1px,transparent_1px)] bg-[size:40px_40px] pointer-events-none"></div>
@@ -144,10 +143,11 @@ const Game = () => {
       {/* HUD */}
       <GameHUD
         myPlayer={myPlayer}
-        enemyPlayer={enemyPlayer}
+        enemyPlayer={enemyPlayer || null}
         timer={combatTimer}
         myProgress={game.questions?.length ? (Object.keys(myAnswers).length / game.questions.length) * 100 : 0}
-        enemyProgress={enemyPlayer.progress || 0}
+        enemyProgress={enemyPlayer?.progress || 0}
+        isSolo={isSoloMode}
       />
 
       {/* Combat Arena */}
@@ -159,6 +159,7 @@ const Game = () => {
           killMode={killMode}
           onKill={handleTriggerKill}
           didShoot={!!animationType}
+          isSolo={isSoloMode}
         />
       </div>
 

@@ -474,7 +474,6 @@ const QuizzesManager = ({ subject, onSelectQuiz, onBack }) => {
             <h3 className="text-xl font-bold mb-2">{quiz.title}</h3>
             <div className="text-sm text-gray-400 mb-4">
               <p>Difficulty: {quiz.difficulty || 'Medium'}</p>
-              <p>Time: {quiz.timeLimit || 180}s</p>
             </div>
             
             <div className="flex gap-2">
@@ -527,18 +526,15 @@ const QuizzesManager = ({ subject, onSelectQuiz, onBack }) => {
 const QuizModal = ({ isOpen, onClose, quiz, subjectId, onSave }) => {
   const [title, setTitle] = useState('');
   const [difficulty, setDifficulty] = useState('Medium');
-  const [timeLimit, setTimeLimit] = useState(180);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (quiz) {
       setTitle(quiz.title || '');
       setDifficulty(quiz.difficulty || 'Medium');
-      setTimeLimit(quiz.timeLimit || 180);
     } else {
       setTitle('');
       setDifficulty('Medium');
-      setTimeLimit(180);
     }
   }, [quiz]);
 
@@ -550,7 +546,7 @@ const QuizModal = ({ isOpen, onClose, quiz, subjectId, onSave }) => {
 
     setSaving(true);
     try {
-      const data = { title, difficulty, timeLimit: Number(timeLimit) };
+      const data = { title, difficulty };
       // Remove subjectId from data since it's in the path
       
       if (quiz) {
@@ -613,15 +609,7 @@ const QuizModal = ({ isOpen, onClose, quiz, subjectId, onSave }) => {
             </select>
           </div>
 
-          <div>
-            <label className="block text-sm font-bold uppercase mb-2">Time Limit (seconds)</label>
-            <input
-              type="number"
-              value={timeLimit}
-              onChange={(e) => setTimeLimit(e.target.value)}
-              className="w-full bg-[#0f1923] border border-red-500/30 px-4 py-2 text-white focus:border-red-500 outline-none"
-            />
-          </div>
+
 
           <button
             onClick={handleSave}

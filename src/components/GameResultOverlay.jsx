@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import gsap from 'gsap';
 import { Trophy, Home, CheckCircle, XCircle, AlertTriangle, Award, Target } from 'lucide-react';
 
-const GameResultOverlay = ({ result, myPlayer, enemyPlayer, questions, earnedXP, reason, myLocalAnswers, enemyLocalAnswers }) => {
+const GameResultOverlay = ({ result, myPlayer, enemyPlayer, questions, earnedXP, reason, myLocalAnswers, enemyLocalAnswers, isSolo }) => {
   const navigate = useNavigate();
   const containerRef = useRef(null);
   const xpCounterRef = useRef(null);
@@ -117,13 +117,13 @@ const GameResultOverlay = ({ result, myPlayer, enemyPlayer, questions, earnedXP,
   });
 
   return (
-    <div ref={containerRef} className="fixed inset-0 z-[100] flex flex-col items-center justify-center overflow-y-auto bg-[#0f1923] h-screen w-screen">
+    <div ref={containerRef} className="fixed inset-0 z-[100] flex flex-col items-center justify-start overflow-y-auto bg-[#0f1923] min-h-screen w-screen">
       
       {/* Flash overlay */}
-      <div className={`result-flash absolute inset-0 ${isVictory ? 'bg-green-500' : isDraw ? 'bg-yellow-500' : 'bg-red-500'}`}></div>
+      <div className={`result-flash fixed inset-0 ${isVictory ? 'bg-green-500' : isDraw ? 'bg-yellow-500' : 'bg-red-500'}`}></div>
 
       {/* Background */}
-      <div className="absolute inset-0 bg-[#0f1923]">
+      <div className="fixed inset-0 bg-[#0f1923]">
         {/* Subtle Color Tint - reduced opacity */}
         <div className={`absolute inset-0 opacity-10 ${isVictory ? 'bg-green-900' : isDraw ? 'bg-yellow-900' : 'bg-red-900'}`}></div>
 
@@ -162,7 +162,7 @@ const GameResultOverlay = ({ result, myPlayer, enemyPlayer, questions, earnedXP,
       )}
 
       {/* Main Content */}
-      <div className="relative z-10 w-full max-w-4xl px-4">
+      <div className="relative z-10 w-full max-w-4xl px-4 py-8 my-auto">
         
         {/* Result Title */}
         <div className="text-center mb-6 md:mb-8">
@@ -171,103 +171,206 @@ const GameResultOverlay = ({ result, myPlayer, enemyPlayer, questions, earnedXP,
           }`} style={{
             textShadow: `0 0 30px ${isVictory ? 'rgba(34, 197, 94, 0.6)' : isDraw ? 'rgba(234, 179, 8, 0.6)' : 'rgba(239, 68, 68, 0.6)'}`
           }}>
-            {isVictory ? 'VICTORY' : isDraw ? 'DRAW' : 'DEFEAT'}
+            {isSolo ? 'COMPLETE' : (isVictory ? 'VICTORY' : isDraw ? 'DRAW' : 'DEFEAT')}
           </h1>
           
           <p className="result-subtitle text-gray-400 text-sm md:text-base uppercase tracking-[0.2em] font-bold flex items-center justify-center gap-2">
-            {reason === 'backfire' && <AlertTriangle size={16} className="text-yellow-500" />}
-            {reason === 'backfire' ? (isVictory ? 'ENEMY WEAPON BACKFIRED' : 'WEAPON BACKFIRED - LOW ACCURACY') :
-             reason === 'kill' ? (isVictory ? 'TARGET ELIMINATED' : 'KILLED IN ACTION') :
-             reason === 'enemy_left' ? 'OPPONENT DISCONNECTED' :
-             'MATCH ENDED'}
+            {isSolo ? (
+              // Performance-based message for solo mode
+              (() => {
+                const percentage = questions.length > 0 ? (myCorrect / questions.length) * 100 : 0;
+                if (percentage >= 90) return <span className="text-green-400">🎯 EXCELLENT WORK!</span>;
+                if (percentage >= 70) return <span className="text-blue-400">👍 GOOD JOB!</span>;
+                if (percentage >= 50) return <span className="text-yellow-400">⚡ NOT BAD!</span>;
+                return <span className="text-orange-400">💪 HARD LUCK, KEEP PRACTICING!</span>;
+              })()
+            ) : (
+              <>
+                {reason === 'backfire' && <AlertTriangle size={16} className="text-yellow-500" />}
+                {reason === 'backfire' ? (isVictory ? 'ENEMY WEAPON BACKFIRED' : 'WEAPON BACKFIRED - LOW ACCURACY') :
+                 reason === 'kill' ? (isVictory ? 'TARGET ELIMINATED' : 'KILLED IN ACTION') :
+                 reason === 'enemy_left' ? 'OPPONENT DISCONNECTED' :
+                 'MATCH ENDED'}
+              </>
+            )}
           </p>
           <p className="text-gray-400 font-mono text-sm tracking-widest mt-2 uppercase">
-            {reason === 'kill' 
-              ? (isVictory ? `TERMINATED ${enemyPlayer?.name}` : `ELIMINATED BY ${enemyPlayer?.name}`)
-              : reason === 'backfire'
-              ? 'SYSTEM OVERLOAD'
-              : reason === 'enemy_left'
-              ? 'OPPONENT DISCONNECTED'
-              : 'TIME EXPIRED'}
+            {isSolo ? (
+              `${myCorrect} / ${questions.length} CORRECT`
+            ) : (
+              reason === 'kill' 
+                ? (isVictory ? `TERMINATED ${enemyPlayer?.name}` : `ELIMINATED BY ${enemyPlayer?.name}`)
+                : reason === 'backfire'
+                ? 'SYSTEM OVERLOAD'
+                : reason === 'enemy_left'
+                ? 'OPPONENT DISCONNECTED'
+                : 'TIME EXPIRED'
+            )}
           </p>
         </div>
 
-        {/* Stats Container with clip-path-notch */}
+        {/* Stats Container - Different layouts for Solo vs Multiplayer */}
         <div className="stats-container bg-[#0f1923] border border-white/10 p-6 md:p-8 mb-6 relative overflow-hidden clip-path-notch">
           {/* Top accent */}
           <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-red-500 to-transparent"></div>
 
-          {/* Player comparison */}
-          <div className="grid grid-cols-3 gap-4 mb-6 items-center">
-            {/* My stats */}
-            <div className="text-center">
-              <div className="w-20 h-20 sm:w-24 sm:h-24 mx-auto mb-3 border-2 border-blue-500 overflow-hidden clip-path-notch relative">
-                {myPlayer?.avatar?.url ? (
-                  <img src={myPlayer.avatar.url} alt="" className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full bg-blue-500/20 flex items-center justify-center">
-                    <Target size={32} className="text-blue-500" />
-                  </div>
-                )}
-                {/* Corner accents */}
-                <div className="absolute top-0 left-0 w-2 h-2 border-l border-t border-blue-400"></div>
-                <div className="absolute bottom-0 right-0 w-2 h-2 border-r border-b border-blue-400"></div>
+          {isSolo ? (
+            /* SOLO MODE: Detailed Answer Review */
+            <div>
+              {/* Score Summary */}
+              <div className="flex items-center justify-center gap-4 mb-6 pb-6 border-b border-white/10">
+                <div className="w-16 h-16 sm:w-20 sm:h-20 border-2 border-blue-500 overflow-hidden clip-path-notch relative">
+                  {myPlayer?.avatar?.url ? (
+                    <img src={myPlayer.avatar.url} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full bg-blue-500/20 flex items-center justify-center">
+                      <Target size={24} className="text-blue-500" />
+                    </div>
+                  )}
+                  <div className="absolute top-0 left-0 w-2 h-2 border-l border-t border-blue-400"></div>
+                  <div className="absolute bottom-0 right-0 w-2 h-2 border-r border-b border-blue-400"></div>
+                </div>
+                <div>
+                  <p className="text-white font-bold uppercase text-lg mb-1">{myPlayer?.name || 'You'}</p>
+                  <p className="text-blue-500 text-4xl font-black">
+                    {myCorrect}<span className="text-lg text-gray-500">/{questions.length}</span>
+                  </p>
+                  <p className="text-gray-400 text-xs uppercase tracking-wider mt-1">
+                    {((myCorrect / questions.length) * 100).toFixed(0)}% Accuracy
+                  </p>
+                </div>
               </div>
-              <p className="text-white font-bold uppercase text-sm truncate px-2">{myPlayer?.name || 'You'}</p>
-              <p className="text-blue-500 text-3xl font-black">{myCorrect}<span className="text-sm text-gray-500">/{questions.length}</span></p>
-            </div>
 
-            {/* VS */}
-            <div className="flex flex-col items-center justify-center">
-              <div className="w-12 h-12 sm:w-16 sm:h-16 bg-[#0f1923] border-2 border-white/20 flex items-center justify-center clip-path-notch mb-2">
-                <span className="text-white font-black text-xl italic">VS</span>
+              {/* Answer Review Header */}
+              <div className="mb-4">
+                <p className="text-red-500 font-bold uppercase text-xs tracking-wider mb-2">Answer Review</p>
+              </div>
+
+              {/* Detailed Answer Breakdown */}
+              <div className="space-y-3 max-h-96 overflow-y-auto scrollbar-thin scrollbar-thumb-red-500/30 scrollbar-track-transparent pr-2">
+                {questions.map((q, idx) => {
+                  const myAns = myAnswers[idx];
+                  const isCorrect = myAns === q.correctAnswer;
+
+                  return (
+                    <div key={idx} className="question-row bg-black/20 p-4 border border-white/10 hover:border-white/20 transition-colors">
+                      {/* Question Number & Status */}
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 bg-white/5 flex items-center justify-center text-xs font-bold text-white">
+                            {idx + 1}
+                          </div>
+                          <span className="text-gray-400 text-xs uppercase tracking-wider">Question</span>
+                        </div>
+                        <div className={`flex items-center gap-1 text-xs font-bold ${isCorrect ? 'text-green-400' : 'text-red-400'}`}>
+                          {isCorrect ? <CheckCircle size={16} /> : <XCircle size={16} />}
+                          {isCorrect ? 'CORRECT' : 'INCORRECT'}
+                        </div>
+                      </div>
+
+                      {/* Question Text */}
+                      <p className="text-white text-sm mb-3 leading-relaxed">{q.question}</p>
+
+                      {/* Your Answer */}
+                      <div className="mb-2">
+                        <p className="text-gray-500 text-xs uppercase tracking-wider mb-1">Your Answer:</p>
+                        <div className={`p-2 border ${isCorrect ? 'border-green-500/30 bg-green-500/5' : 'border-red-500/30 bg-red-500/5'}`}>
+                          <p className={`text-sm font-medium ${isCorrect ? 'text-green-400' : 'text-red-400'}`}>
+                            {myAns || <span className="text-gray-600 italic">No answer</span>}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Correct Answer (only show if wrong) */}
+                      {!isCorrect && (
+                        <div>
+                          <p className="text-gray-500 text-xs uppercase tracking-wider mb-1">Correct Answer:</p>
+                          <div className="p-2 border border-green-500/30 bg-green-500/5">
+                            <p className="text-sm font-medium text-green-400">{q.correctAnswer}</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
-
-            {/* Enemy stats */}
-            <div className="text-center">
-              <div className="w-20 h-20 sm:w-24 sm:h-24 mx-auto mb-3 border-2 border-red-500 overflow-hidden clip-path-notch relative">
-                {enemyPlayer?.avatar?.url ? (
-                  <img src={enemyPlayer.avatar.url} alt="" className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full bg-red-500/20 flex items-center justify-center">
-                    <Target size={32} className="text-red-500" />
+          ) : (
+            /* MULTIPLAYER MODE: VS Comparison */
+            <>
+              {/* Player comparison */}
+              <div className="grid grid-cols-3 gap-4 mb-6 items-center">
+                {/* My stats */}
+                <div className="text-center">
+                  <div className="w-20 h-20 sm:w-24 sm:h-24 mx-auto mb-3 border-2 border-blue-500 overflow-hidden clip-path-notch relative">
+                    {myPlayer?.avatar?.url ? (
+                      <img src={myPlayer.avatar.url} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full bg-blue-500/20 flex items-center justify-center">
+                        <Target size={32} className="text-blue-500" />
+                      </div>
+                    )}
+                    {/* Corner accents */}
+                    <div className="absolute top-0 left-0 w-2 h-2 border-l border-t border-blue-400"></div>
+                    <div className="absolute bottom-0 right-0 w-2 h-2 border-r border-b border-blue-400"></div>
                   </div>
-                )}
-                 {/* Corner accents */}
-                 <div className="absolute top-0 left-0 w-2 h-2 border-l border-t border-red-400"></div>
-                 <div className="absolute bottom-0 right-0 w-2 h-2 border-r border-b border-red-400"></div>
-              </div>
-              <p className="text-white font-bold uppercase text-sm truncate px-2">{enemyPlayer?.name || 'Opponent'}</p>
-              <p className="text-red-500 text-3xl font-black">{enemyCorrect}<span className="text-sm text-gray-500">/{questions.length}</span></p>
-            </div>
-          </div>
+                  <p className="text-white font-bold uppercase text-sm truncate px-2">{myPlayer?.name || 'You'}</p>
+                  <p className="text-blue-500 text-3xl font-black">{myCorrect}<span className="text-sm text-gray-500">/{questions.length}</span></p>
+                </div>
 
-          {/* Question breakdown - ALWAYS SHOW for both victory and defeat */}
-          <div className="space-y-2 max-h-48 overflow-y-auto scrollbar-thin scrollbar-thumb-red-500/30 scrollbar-track-transparent">
-            {questions.map((q, idx) => {
-              const myAns = myAnswers[idx];
-              const enAns = enemyAnswers[idx];
-              const isMyCorrect = myAns === q.correctAnswer;
-              const isEnCorrect = enAns === q.correctAnswer;
-
-              return (
-                <div key={idx} className="question-row grid grid-cols-3 gap-2 bg-black/20 p-2 border border-white/10">
-                  <div className={`flex items-center gap-2 text-xs ${isMyCorrect ? 'text-green-400' : 'text-red-400'}`}>
-                    {isMyCorrect ? <CheckCircle size={14} /> : <XCircle size={14} />}
-                    <span className="truncate">{myAns || '-'}</span>
-                  </div>
-                  <div className="text-center text-white text-xs font-mono bg-black/40 py-1 px-2 rounded">
-                    {q.correctAnswer}
-                  </div>
-                  <div className={`flex items-center justify-end gap-2 text-xs ${isEnCorrect ? 'text-green-400' : 'text-red-400'}`}>
-                    <span className="truncate">{enAns || '-'}</span>
-                    {isEnCorrect ? <CheckCircle size={14} /> : <XCircle size={14} />}
+                {/* VS */}
+                <div className="flex flex-col items-center justify-center">
+                  <div className="w-12 h-12 sm:w-16 sm:h-16 bg-[#0f1923] border-2 border-white/20 flex items-center justify-center clip-path-notch mb-2">
+                    <span className="text-white font-black text-xl italic">VS</span>
                   </div>
                 </div>
-              );
-            })}
-          </div>
+
+                {/* Enemy stats */}
+                <div className="text-center">
+                  <div className="w-20 h-20 sm:w-24 sm:h-24 mx-auto mb-3 border-2 border-red-500 overflow-hidden clip-path-notch relative">
+                    {enemyPlayer?.avatar?.url ? (
+                      <img src={enemyPlayer.avatar.url} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full bg-red-500/20 flex items-center justify-center">
+                        <Target size={32} className="text-red-500" />
+                      </div>
+                    )}
+                     {/* Corner accents */}
+                     <div className="absolute top-0 left-0 w-2 h-2 border-l border-t border-red-400"></div>
+                     <div className="absolute bottom-0 right-0 w-2 h-2 border-r border-b border-red-400"></div>
+                  </div>
+                  <p className="text-white font-bold uppercase text-sm truncate px-2">{enemyPlayer?.name || 'Opponent'}</p>
+                  <p className="text-red-500 text-3xl font-black">{enemyCorrect}<span className="text-sm text-gray-500">/{questions.length}</span></p>
+                </div>
+              </div>
+
+              {/* Question breakdown - Quick comparison */}
+              <div className="space-y-2 max-h-48 overflow-y-auto scrollbar-thin scrollbar-thumb-red-500/30 scrollbar-track-transparent">
+                {questions.map((q, idx) => {
+                  const myAns = myAnswers[idx];
+                  const enAns = enemyAnswers[idx];
+                  const isMyCorrect = myAns === q.correctAnswer;
+                  const isEnCorrect = enAns === q.correctAnswer;
+
+                  return (
+                    <div key={idx} className="question-row grid grid-cols-3 gap-2 bg-black/20 p-2 border border-white/10">
+                      <div className={`flex items-center gap-2 text-xs ${isMyCorrect ? 'text-green-400' : 'text-red-400'}`}>
+                        {isMyCorrect ? <CheckCircle size={14} /> : <XCircle size={14} />}
+                        <span className="truncate">{myAns || '-'}</span>
+                      </div>
+                      <div className="text-center text-white text-xs font-mono bg-black/40 py-1 px-2 rounded">
+                        {q.correctAnswer}
+                      </div>
+                      <div className={`flex items-center justify-end gap-2 text-xs ${isEnCorrect ? 'text-green-400' : 'text-red-400'}`}>
+                        <span className="truncate">{enAns || '-'}</span>
+                        {isEnCorrect ? <CheckCircle size={14} /> : <XCircle size={14} />}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
 
           {/* Bottom accent */}
           <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-red-500 to-transparent"></div>
