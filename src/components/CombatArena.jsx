@@ -1,9 +1,10 @@
 import React, { memo, useRef, useEffect, useState } from 'react';
 import { Swiper, SwiperSlide } from 'swiper/react';
-import { EffectCards } from 'swiper/modules';
+import { EffectCards, Virtual } from 'swiper/modules';
 import { Shield, Zap, Crosshair, CheckCircle, Target } from 'lucide-react';
 import 'swiper/css';
 import 'swiper/css/effect-cards';
+import 'swiper/css/virtual';
 
 const CombatArena = ({ 
     questions, 
@@ -38,23 +39,30 @@ const CombatArena = ({
             <Swiper 
                 onSwiper={(swiper) => {
                     swiperRef.current = swiper;
-                    // Initialize lock state
                     swiper.allowSlideNext = false;
                 }}
                 onSlideChange={(swiper) => setActiveIndex(swiper.activeIndex)}
                 effect={'cards'} 
                 grabCursor={true} 
-                modules={[EffectCards]} 
+                modules={[EffectCards, Virtual]} 
                 className="w-full h-full"
-                speed={150} // Faster transition for snappier feel
+                speed={150}
                 allowTouchMove={true}
+                virtual
+                observer={true}
+                observeParents={true}
+                cardsEffect={{
+                    perSlideOffset: 8, // Reduce offset
+                    perSlideRotate: 2, // Reduce rotation to minimize pixel shuffling
+                    slideShadows: false, // Performance: Disable shadows on cards
+                }}
             >
                 
                 {/* 1. QUESTIONS CARDS */}
                 {questions.map((q, qIndex) => (
-                <SwiperSlide key={qIndex} className="bg-transparent">
+                <SwiperSlide key={q.id || qIndex} virtualIndex={qIndex} className="bg-transparent will-change-transform">
                     {/* VALORANT CARD STYLE */}
-                    <div className="w-full h-full bg-[#1a2332] border border-white/10 relative overflow-hidden group clip-path-notch">
+                    <div className="w-full h-full bg-[#1a2332] border border-white/10 relative overflow-hidden group clip-path-notch backface-hidden">
                         
                         {/* Status Icon */}
                         {myAnswers[qIndex] && (
@@ -122,7 +130,7 @@ const CombatArena = ({
                 ))}
 
                 {/* 2. THE KILL CARD (LAST SLIDE) */}
-                <SwiperSlide className="bg-transparent">
+                <SwiperSlide key="kill-card" virtualIndex={questions.length} className="bg-transparent will-change-transform">
                     <div className={`w-full h-full bg-[#080808] border-2 flex flex-col items-center justify-center relative overflow-hidden transition-all duration-500 clip-path-notch
                         ${killMode 
                             ? 'border-red-600 shadow-[0_0_30px_rgba(220,38,38,0.3)]' 
@@ -180,6 +188,9 @@ const CombatArena = ({
                 10% { transform: scale(1.05) translate(0, 10px); }
                 100% { transform: scale(1) translate(0, 0); } 
             }
+            /* Hardware acceleration helpers */
+            .backface-hidden { -webkit-backface-visibility: hidden; backface-visibility: hidden; }
+            .will-change-transform { will-change: transform; }
         `}</style>
     </div>
   );
