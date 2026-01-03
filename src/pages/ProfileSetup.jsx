@@ -10,7 +10,6 @@ import { CheckCircle, ArrowRight } from 'lucide-react';
 // Import avatar images
 import phantomImg from '../assets/avatars/phantom.png';
 import viperImg from '../assets/avatars/viper.png';
-import reconImg from '../assets/avatars/recon.png';
 import shadowImg from '../assets/avatars/shadow.png';
 import sentinelImg from '../assets/avatars/sentinel.png';
 import roninImg from '../assets/avatars/ronin.png';
