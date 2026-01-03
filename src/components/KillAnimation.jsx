@@ -69,16 +69,7 @@ const KillAnimation = ({ mode, enemyAvatar, onComplete }) => {
           audio.play().catch(() => {});
         });
 
-        // 2. Red flash
-        tl.to('.defeat-flash', {
-          opacity: 0.4,
-          duration: 0.1
-        });
 
-        tl.to('.defeat-flash', {
-          opacity: 0,
-          duration: 0.2
-        });
 
         // 3. Background darken
         tl.to('.defeat-bg', {
@@ -178,6 +169,8 @@ const KillAnimation = ({ mode, enemyAvatar, onComplete }) => {
               VICTORY
             </h1>
 
+
+
             {/* Bottom accent line */}
             <div className="victory-line h-[2px] w-40 sm:w-48 md:w-64 mx-auto mt-6 md:mt-8 mb-4 md:mb-6 bg-gradient-to-r from-transparent via-emerald-400 to-transparent"></div>
 
@@ -191,9 +184,6 @@ const KillAnimation = ({ mode, enemyAvatar, onComplete }) => {
 
       {mode === 'victim' && (
         <>
-          {/* Red flash */}
-          <div className="defeat-flash absolute inset-0 bg-red-600 opacity-0"></div>
-
           {/* Defeat Background */}
           <div className="defeat-bg absolute inset-0 bg-gradient-to-b from-red-950/60 to-[#0f1923] opacity-0"></div>
 
@@ -211,6 +201,8 @@ const KillAnimation = ({ mode, enemyAvatar, onComplete }) => {
             }}>
               DEFEAT
             </h1>
+
+
 
             {/* Bottom accent line */}
             <div className="defeat-line h-[2px] sm:h-[3px] w-48 sm:w-56 md:w-72 mx-auto mt-6 md:mt-8 mb-4 md:mb-6 bg-gradient-to-r from-transparent via-red-500 to-transparent"></div>

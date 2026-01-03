@@ -123,7 +123,8 @@ export const useGameState = (roomId, user, navigate) => {
 
         // Auto-end game on timeout (host only)
         if (seconds <= 0 && isHost && !game.winner && roomId && game.state === 'combat') {
-          update(ref(rtdb, `games/${roomId}`), { winner: 'DRAW' });
+          // Instead of instantly setting DRAW, use the checkWinner logic
+          checkWinner('timeout');
         }
       } else {
         setCombatTimer(180);
@@ -182,8 +183,8 @@ export const useGameState = (roomId, user, navigate) => {
         return ans !== q?.correctAnswer;
       }).length;
       
-      // SPAM CRITERIA: 5 answers in < 60s with 3+ wrong
-      if (timeSpan < 60 && wrongCount >= 3) {
+      // SPAM CRITERIA: 5 answers in < 45s with 4+ wrong (Refined)
+      if (timeSpan < 45 && wrongCount >= 4) {
         console.log('🚨 SPAM DETECTED!', { timeSpan, wrongCount });
         const opponentId = Object.keys(game.players).find(id => id !== myId);
         await update(ref(rtdb, `games/${roomId}`), {
@@ -195,37 +196,56 @@ export const useGameState = (roomId, user, navigate) => {
     }
   }, [roomId, myId, game]);
 
-  // Kill trigger
-  const handleTriggerKill = useCallback(() => {
-    if (animationType || !roomId) return;
+  // Determine Winner Logic (New: Most Correct Answers)
+  const checkWinner = useCallback((triggerReason = 'finish') => {
+    if (animationType || !roomId || !game) return;
 
-    let correctCount = 0;
-    const questions = game?.questions || [];
-    const totalQuestions = questions.length;
-
+    const questions = game.questions || [];
+    
+    // Calculate stats
+    let myCorrect = 0;
+    let enemyCorrect = 0;
+    
+    // My stats
     questions.forEach((q, idx) => {
-      if (myAnswers[idx] === q.correctAnswer) correctCount++;
+      if (myAnswers[idx] === q.correctAnswer) myCorrect++;
     });
 
-    const requiredCorrect = Math.ceil(totalQuestions / 3);
-    const isBackfire = correctCount < requiredCorrect;
+    // Enemy stats (needed to determine winner locally if I am host, or just for verification)
+    const enemyAnswersMap = enemyPlayer?.answers || {};
+    questions.forEach((q, idx) => {
+      if (enemyAnswersMap[idx] === q.correctAnswer) enemyCorrect++;
+    });
 
-    console.log('🎯 Kill triggered:', { correctCount, requiredCorrect, isBackfire });
+    console.log('🏆 Checking Winner:', { myCorrect, enemyCorrect, reason: triggerReason });
 
-    // Update Firebase with winner and reason
-    const winnerId = isBackfire ? enemyId : myId;
-    const reason = isBackfire ? 'backfire' : 'kill';
-    
+    let finalWinner = null;
+    let finalReason = triggerReason === 'timeout' ? 'timeout' : 'kill'; // kill means finished normally in this context for animation
+
+    if (myCorrect > enemyCorrect) {
+      finalWinner = myId;
+    } else if (enemyCorrect > myCorrect) {
+      finalWinner = enemyId;
+    } else {
+      finalWinner = 'DRAW';
+    }
+
+    // Update Firebase
     update(ref(rtdb, `games/${roomId}`), {
-      winner: winnerId,
-      reason: reason,
+      winner: finalWinner,
+      reason: finalReason,
       state: 'finished'
     }).then(() => {
-      console.log('✅ Game updated in Firebase with winner:', winnerId);
+      console.log('✅ Game updated:', { winner: finalWinner, reason: finalReason });
     }).catch(err => {
       console.error('❌ Failed to update game:', err);
     });
-  }, [animationType, game?.questions, myAnswers, roomId, myId, enemyId]);
+  }, [animationType, game, myAnswers, roomId, myId, enemyId, enemyPlayer]);
+
+  // Handle game end trigger (renamed from handleTriggerKill)
+  const handleGameEndCheck = useCallback(() => {
+     checkWinner('normal_finish');
+  }, [checkWinner]);
 
   // Animation complete handler
   const onAnimationComplete = useCallback(() => {
@@ -261,21 +281,25 @@ export const useGameState = (roomId, user, navigate) => {
     if (!game?.winner || animationType || game.winner === 'DRAW' || animationShownRef.current) return;
     
     // If game ended due to kill, backfire, or spam, show animation
-    if (game.reason === 'kill' || game.reason === 'backfire' || game.reason === 'spam_detected') {
+    // If game ended, show animation
+    if (game.reason) {
       console.log('🎯 Triggering animation:', { winner: game.winner, reason: game.reason, myId });
       
       animationShownRef.current = true;
       
       const iWon = game.winner === myId;
       const reason = game.reason;
+      const isDraw = game.winner === 'DRAW';
       
-      if (iWon) {
+      if (isDraw) {
+        setAnimationType('backfire'); // Use backfire/draw animation
+      } else if (iWon) {
         setAnimationType('kill'); // Victory
       } else {
-        if (reason === 'kill') {
-          setAnimationType('victim'); // Defeated
+        if (reason === 'spam_detected') {
+             setAnimationType('backfire'); // Spam punish
         } else {
-          setAnimationType('backfire'); // Weapon jammed or spam
+             setAnimationType('victim'); // Defeated
         }
       }
       
@@ -304,7 +328,7 @@ export const useGameState = (roomId, user, navigate) => {
     
     // Handlers
     handleAnswer,
-    handleTriggerKill,
+    handleTriggerKill: handleGameEndCheck, // Expose as same name for compatibility with CombatArena
     onAnimationComplete,
     updateXP
   };

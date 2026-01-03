@@ -18,11 +18,13 @@ import { Swords, Users, User, Bell, LogOut, Trophy, Target, Shield, Search, User
 // Components
 import ChatSidebar from '../components/ChatSidebar';
 import InviteOverlay from '../components/InviteOverlay';
+import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import { SubjectModal } from '../components/dashboard';
 
 // Utils
 import { getRankFromXP } from '../utils/rankingSystem';
 import { runCleanupTasks } from '../utils/cleanup';
+import { useFriendSystem } from '../hooks';
 
 const Dashboard = () => {
   const { user } = useSelector((state) => state.auth);
@@ -41,6 +43,7 @@ const Dashboard = () => {
   const [searchResults, setSearchResults] = useState([]);
   const [allPlayers, setAllPlayers] = useState([]); 
   const [friendRequests, setFriendRequests] = useState([]);
+  const [friendToDelete, setFriendToDelete] = useState(null);
   
   // Game
   const [activeInvite, setActiveInvite] = useState(null);
@@ -158,6 +161,12 @@ const Dashboard = () => {
     setSearchResults(filtered);
   }, [searchQuery, allPlayers, user.uid]);
 
+  // Calculate friends list
+  const friends = useMemo(() => {
+    if (!userData?.friends) return [];
+    return allPlayers.filter(p => userData.friends.includes(p.uid));
+  }, [userData?.friends, allPlayers]);
+
   // --- Handlers ---
   const handleAcceptInvite = useCallback(async () => {
     if (!activeInvite) return;
@@ -203,68 +212,18 @@ const Dashboard = () => {
     setSearchQuery(e.target.value);
   }, []);
 
-  const sendFriendRequest = useCallback(async (targetPlayer) => {
-    // Check if already friends
-    if (userData?.friends?.includes(targetPlayer.uid)) {
-      toast.error('ALREADY ALLIES');
-      return;
+  // Friend System Hook
+  const { sendFriendRequest, acceptFriendRequest, removeFriend, loading: friendSystemLoading } = useFriendSystem(user);
+  
+  // Use the hook's removeFriend in the modal confirmation
+  const handleConfirmDelete = async () => {
+    if (friendToDelete) {
+      await removeFriend(friendToDelete.uid, friendToDelete.name);
+      setFriendToDelete(null);
     }
+  };
 
-    try {
-      const requestId = push(ref(rtdb, `friendRequests/${targetPlayer.uid}`)).key;
-      const requestData = {
-        from: user.uid,
-        to: targetPlayer.uid,
-        fromName: userData?.displayName || user.displayName,
-        toName: targetPlayer.displayName,
-        status: 'pending',
-        timestamp: Date.now()
-      };
-      
-      await set(ref(rtdb, `friendRequests/${targetPlayer.uid}/${requestId}`), requestData);
-      toast.success(`REQUEST SENT TO ${targetPlayer.displayName.toUpperCase()}`);
-      setSearchQuery('');
-    } catch (error) {
-      console.error('Friend request error:', error);
-      toast.error('FAILED TO SEND REQUEST');
-    }
-  }, [user, userData]);
 
-  const acceptFriendRequest = useCallback(async (request) => {
-    try {
-      // Update both players' friend lists in Firestore (this triggers real-time updates via onSnapshot)
-      await Promise.all([
-        updateDoc(doc(db, 'players', user.uid), { friends: arrayUnion(request.from) }),
-        updateDoc(doc(db, 'players', request.from), { friends: arrayUnion(user.uid) })
-      ]);
-      
-      // Remove request from Realtime DB
-      await remove(ref(rtdb, `friendRequests/${user.uid}/${request.id}`));
-      
-      toast.success('FRIEND ADDED');
-    } catch (error) {
-      console.error('Accept friend error:', error);
-      toast.error('FAILED TO ACCEPT');
-    }
-  }, [user.uid]);
-
-  const deleteFriend = useCallback(async (friendUid, friendName) => {
-    try {
-      // Import arrayRemove from firestore
-      const { arrayRemove } = await import('firebase/firestore');
-      
-      // Remove friend from both users' friend lists
-      await Promise.all([
-        updateDoc(doc(db, 'players', user.uid), { friends: arrayRemove(friendUid) }),
-        updateDoc(doc(db, 'players', friendUid), { friends: arrayRemove(user.uid) })
-      ]);
-      
-      toast.success(`REMOVED ${friendName.toUpperCase()} FROM SQUAD`);
-    } catch (error) {
-      console.error('Delete friend error:', error);
-      toast.error('FAILED TO REMOVE FRIEND');
-    }
-  }, [user.uid]);
 
   const handleSubjectClick = useCallback(async (subject) => {
     console.log('🎯 Subject clicked:', subject);
@@ -278,14 +237,6 @@ const Dashboard = () => {
     const quizzes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     console.log('📝 Found quizzes:', quizzes);
     setSubjectQuizzes(quizzes);
-    
-    // Auto-select first quiz if available
-    if (quizzes.length > 0) {
-      console.log('✅ Auto-selecting first quiz:', quizzes[0]);
-      setSelectedQuiz(quizzes[0]);
-    } else {
-      console.warn('⚠️ No quizzes found for subject:', subject.id);
-    }
   }, []);
 
   const handleModeSelection = useCallback((mode) => {
@@ -514,9 +465,10 @@ const Dashboard = () => {
             onSearchChange={handleSearchChange}
             searchResults={searchResults}
             onSendRequest={sendFriendRequest}
-            onDeleteFriend={deleteFriend}
+            onRequestDelete={(friend) => setFriendToDelete(friend)}
             userData={userData}
             allPlayers={allPlayers}
+            friends={friends}
           />
         )}
 
@@ -542,6 +494,14 @@ const Dashboard = () => {
           invite={activeInvite}
           onAccept={handleAcceptInvite}
           onDecline={handleDeclineInvite}
+        />
+      )}
+
+      {friendToDelete && (
+        <ConfirmDeleteModal
+          friendName={friendToDelete.name}
+          onConfirm={handleConfirmDelete}
+          onCancel={() => setFriendToDelete(null)}
         />
       )}
 
@@ -599,11 +559,8 @@ const CombatTab = memo(({ subjects, onSubjectClick, userData }) => (
 ));
 
 // Community Tab Component
-const CommunityTab = memo(({ searchQuery, onSearchChange, searchResults, onSendRequest, onDeleteFriend, userData, allPlayers }) => {
-  const friends = useMemo(() => {
-    if (!userData?.friends) return [];
-    return allPlayers.filter(p => userData.friends.includes(p.uid));
-  }, [userData?.friends, allPlayers]);
+const CommunityTab = memo(({ searchQuery, onSearchChange, searchResults, onSendRequest, onRequestDelete, userData, allPlayers, friends }) => {
+
 
   return (
     <div className="space-y-6">
@@ -683,11 +640,7 @@ const CommunityTab = memo(({ searchQuery, onSearchChange, searchResults, onSendR
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
-                  onClick={() => {
-                    if (window.confirm(`Remove ${friend.displayName} from your squad?`)) {
-                      onDeleteFriend(friend.uid, friend.displayName);
-                    }
-                  }}
+                  onClick={() => onRequestDelete({ uid: friend.uid, name: friend.displayName })}
                   className="bg-transparent border border-red-500/50 hover:bg-red-500/10 hover:border-red-500 text-red-500 px-3 py-2 text-xs font-bold uppercase transition-all"
                   title="Remove friend"
                 >

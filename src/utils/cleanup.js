@@ -70,39 +70,61 @@ export const cleanupOldInvites = async () => {
 
     console.log('🧹 Starting invite cleanup...');
 
-    // Reference to invites
-    const invitesRef = ref(rtdb, 'invites');
+    // Reference to invites - CORRECT PATH is gameInvites
+    const invitesRef = ref(rtdb, 'gameInvites');
     
     // Get all invites
-    const snapshot = await get(invitesRef);
+    // Note: This might fail if rules don't allow reading root gameInvites
+    // We'll wrap in specific try/catch to suppress permission errors
+    let snapshot;
+    try {
+      snapshot = await get(invitesRef);
+    } catch (err) {
+      if (err.code === 'PERMISSION_DENIED') {
+        console.warn('⚠️ Cleanup skipped: Permission denied (User cannot read all invites)');
+        return { deleted: 0, total: 0, error: 'Permission denied' };
+      }
+      throw err;
+    }
     
     if (!snapshot.exists()) {
       console.log('✅ No invites to clean up');
       return { deleted: 0, total: 0 };
     }
 
-    const invites = snapshot.val();
-    const inviteIds = Object.keys(invites);
+    const usersInvites = snapshot.val(); // Organized by userID
     let deletedCount = 0;
+    let checkedCount = 0;
 
-    // Delete invites older than 1 hour
-    const deletePromises = inviteIds.map(async (inviteId) => {
-      const invite = invites[inviteId];
-      const createdAt = invite.createdAt || 0;
+    const deletePromises = [];
 
-      if (createdAt < oneHourAgo) {
-        await remove(ref(rtdb, `invites/${inviteId}`));
-        deletedCount++;
-      }
+    // Iterate through each user's invite list
+    Object.keys(usersInvites).forEach(userId => {
+      const userInvites = usersInvites[userId];
+      if (!userInvites) return;
+
+      Object.keys(userInvites).forEach(inviteId => {
+        checkedCount++;
+        const invite = userInvites[inviteId];
+        const timestamp = invite.timestamp || 0;
+
+        if (timestamp < oneHourAgo) {
+          deletePromises.push(
+            remove(ref(rtdb, `gameInvites/${userId}/${inviteId}`))
+              .catch(e => console.warn(`Failed to delete invite ${inviteId}:`, e))
+          );
+          deletedCount++;
+        }
+      });
     });
 
     await Promise.all(deletePromises);
 
-    console.log(`✅ Invite cleanup complete: Deleted ${deletedCount} out of ${inviteIds.length} invites`);
+    console.log(`✅ Invite cleanup complete: Deleted ${deletedCount} out of ${checkedCount} invites`);
     
     return {
       deleted: deletedCount,
-      total: inviteIds.length,
+      total: checkedCount,
       message: `Cleaned up ${deletedCount} old invite(s)`
     };
 

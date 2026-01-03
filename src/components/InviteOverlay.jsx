@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import gsap from 'gsap';
-import { Swords, Check, X, Clock, AlertTriangle } from 'lucide-react';
+import { Swords, Check, X } from 'lucide-react';
 import inviteSfx from '../assets/sounds/invite_notification.mp3';
 
 const InviteOverlay = ({ invite, onAccept, onDecline }) => {
@@ -29,32 +29,20 @@ const InviteOverlay = ({ invite, onAccept, onDecline }) => {
         duration: 0.15
       });
 
-      // 3. Main card slam in from top
-      tl.fromTo('.main-card', 
-        { y: -200, opacity: 0, rotateX: 45, scale: 0.8 },
+      // 3. Main content slam in
+      tl.fromTo('.main-content', 
+        { y: -50, opacity: 0, scale: 0.9 },
         { 
           y: 0, 
           opacity: 1, 
-          rotateX: 0, 
-          scale: 1,
+          scale: 1, 
           duration: 0.8, 
           ease: 'elastic.out(1, 0.7)' 
         },
-        '-=0.3'
+        '-=0.2'
       );
 
-      // 4. Corner brackets animation
-      tl.fromTo('.corner-accent',
-        { scale: 0, rotate: 180 },
-        { 
-          scale: 1, 
-          rotate: 0, 
-          duration: 0.4, 
-          stagger: 0.05,
-          ease: 'back.out(2)' 
-        },
-        '-=0.5'
-      );
+
 
       // 5. Text elements glitch in
       tl.fromTo('.glitch-text', 
@@ -70,17 +58,7 @@ const InviteOverlay = ({ invite, onAccept, onDecline }) => {
         '-=0.4'
       );
 
-      // 6. VS Icon pulse
-      tl.fromTo('.vs-icon',
-        { scale: 0, rotate: -180 },
-        { 
-          scale: 1, 
-          rotate: 0, 
-          duration: 0.5,
-          ease: 'back.out(3)' 
-        },
-        '-=0.3'
-      );
+
 
       // 7. Buttons slide in
       tl.fromTo('.action-button',
@@ -104,14 +82,7 @@ const InviteOverlay = ({ invite, onAccept, onDecline }) => {
         onComplete: onDecline
       });
 
-      // 9. Pulsing warning at 10 seconds remaining
-      tl.to('.warning-pulse', {
-        scale: [1, 1.1, 1],
-        opacity: [0.5, 1, 0.5],
-        duration: 0.5,
-        repeat: -1,
-        ease: 'power1.inOut'
-      }, '-=10');
+
 
     }, containerRef);
 
@@ -131,125 +102,65 @@ const InviteOverlay = ({ invite, onAccept, onDecline }) => {
         }}></div>
         
         {/* Red vignette */}
-        <div className="main-card relative bg-gradient-to-br from-[#1a2332] to-[#0f1923] border-2 border-red-500 shadow-2xl max-w-md w-full mx-4 sm:mx-4 overflow-hidden clip-path-notch">
+        <div className="main-content relative z-10 flex flex-col items-center justify-center w-full h-full max-w-4xl mx-auto px-6 text-center">
+          
           {/* Animated glow */}
-          <div className="absolute inset-0 bg-gradient-to-br from-red-500/20 to-transparent animate-pulse"></div>
+          <div className="absolute inset-0 bg-gradient-to-br from-red-500/10 via-transparent to-red-500/5 animate-pulse pointer-events-none"></div>
+
+
+            {/* Header Text */}
+            <div className="mb-12 scale-110 sm:scale-125">
+              <div className="inline-block px-6 py-2 bg-red-500/10 border border-red-500/30 mb-8 backdrop-blur-sm">
+                <span className="text-red-500 text-sm sm:text-base font-bold uppercase tracking-[0.3em] flex items-center gap-3">
+                  <Swords size={16} /> INCOMING CHALLENGE
+                </span>
+              </div>
+              
+              <h3 className="glitch-text text-white font-black text-4xl sm:text-6xl md:text-7xl uppercase mb-6 leading-none tracking-tight drop-shadow-[0_0_15px_rgba(239,68,68,0.5)]">
+                {invite?.fromName || 'Unknown Agent'}
+              </h3>
+              
+              <p className="glitch-text text-gray-300 text-lg sm:text-2xl font-medium tracking-widest uppercase">
+                HAS INVITED YOU TO <span className="text-red-500 font-bold drop-shadow-[0_0_10px_rgba(239,68,68,0.8)]">{invite?.quizTitle || 'BATTLE'}</span>
+              </p>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex flex-col sm:flex-row justify-center gap-6 sm:gap-8 w-full max-w-2xl">
+              <button 
+                onClick={onDecline}
+                className="action-button group relative px-8 py-4 bg-black/40 border border-gray-500 hover:border-red-500 text-gray-400 hover:text-white transition-all w-full sm:w-auto min-w-[200px] backdrop-blur-md"
+              >
+                <div className="absolute inset-0 bg-red-500/0 group-hover:bg-red-500/10 transition-all duration-300"></div>
+                <span className="flex items-center justify-center gap-3 font-bold uppercase tracking-wider text-sm sm:text-base">
+                  <X size={20} />
+                  DECLINE
+                </span>
+              </button>
+
+              <button 
+                onClick={onAccept}
+                className="action-button group relative px-10 py-4 bg-red-600 hover:bg-red-500 text-white shadow-[0_0_40px_rgba(220,38,38,0.4)] hover:shadow-[0_0_60px_rgba(220,38,38,0.6)] transition-all w-full sm:w-auto min-w-[200px]"
+              >
+                <span className="relative z-10 flex items-center justify-center gap-3 font-black uppercase tracking-wider text-sm sm:text-base">
+                  <Check size={24} />
+                  ACCEPT
+                </span>
+                
+                {/* Button Accents */}
+                <div className="absolute top-0 left-0 w-2 h-2 bg-white"></div>
+                <div className="absolute bottom-0 right-0 w-2 h-2 bg-white"></div>
+              </button>
+            </div>
           
-          {/* Corner accents */}
-          <div className="corner-accent absolute top-0 left-0 w-8 h-8 border-l-4 border-t-4 border-red-500"></div>
-          <div className="corner-accent absolute top-0 right-0 w-8 h-8 border-r-4 border-t-4 border-red-500"></div>
-          <div className="corner-accent absolute bottom-0 left-0 w-8 h-8 border-l-4 border-b-4 border-red-500"></div>
-          <div className="corner-accent absolute bottom-0 right-0 w-8 h-8 border-r-4 border-b-4 border-red-500"></div>
-
-          {/* Content */}
-          <div className="relative z-10 p-4 sm:p-6 md:p-8">
-            {/* Header */}
-            <div className="header-section text-center mb-4 sm:mb-6">
-              <div className="flex items-center justify-center gap-2 sm:gap-3 mb-2 sm:mb-3">
-                <Swords className="icon-pulse text-red-500" size={32} />
-                <h2 className="text-2xl sm:text-3xl font-black uppercase tracking-wider text-red-500" style={{
-                  textShadow: '0 0 20px rgba(239, 68, 68, 0.6)'
-                }}>
-                  CHALLENGE
-                </h2>
-                <Swords className="icon-pulse text-red-500" size={32} />
-              </div>
-              <div className="challenge-bar h-1 bg-gradient-to-r from-transparent via-red-500 to-transparent"></div>
+            {/* Timer Bar (Bottom) */}
+            <div className="absolute bottom-0 left-0 right-0 h-2 bg-gray-900/50">
+              <div 
+                ref={timerBarRef}
+                className="h-full bg-gradient-to-r from-red-600 to-red-500 shadow-[0_0_20px_rgba(239,68,68,0.8)] origin-left"
+              ></div>
             </div>
 
-            {/* Sender Info with Avatar */}
-            <div className="sender-info flex items-center justify-center gap-3 sm:gap-4 mb-4 sm:mb-6 p-3 sm:p-4 bg-black/30 border border-red-500/30 clip-path-notch">
-              {invite?.fromAvatar?.url ? (
-                <img 
-                  src={invite.fromAvatar.url} 
-                  alt={invite.fromName || 'Player'}
-                  className="w-12 h-12 sm:w-16 sm:h-16 border-2 border-red-500 clip-path-notch object-cover"
-                />
-              ) : (
-                <div className="w-12 h-12 sm:w-16 sm:h-16 bg-red-500/20 border-2 border-red-500 clip-path-notch flex items-center justify-center">
-                  <Swords size={24} className="text-red-500" />
-                </div>
-              )}
-              <div className="text-left">
-                <p className="text-gray-400 text-xs uppercase tracking-wider mb-1">Challenger</p>
-                <p className="text-white font-bold text-base sm:text-xl">{invite?.fromName || 'Unknown Player'}</p>
-              </div>
-            </div>
-
-            {/* Challenge Details */}
-            <div className="detail-section space-y-3 mb-6">
-              <div className="bg-black/40 p-3 border-l-4 border-red-500">
-                <p className="text-gray-400 text-sm uppercase tracking-wider mb-1">Quiz</p>
-                <p className="text-white font-bold">{invite?.quizTitle || 'Unknown Quiz'}</p>
-              </div>
-              <div className="bg-black/40 p-3 border-l-4 border-yellow-500">
-                <p className="text-gray-400 text-sm uppercase tracking-wider mb-1">Subject</p>
-                <p className="text-white font-bold">{invite?.subjectName || 'Unknown Subject'}</p>
-              </div>
-            </div>
-            <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-red-500 text-white text-xs font-black px-4 py-1 tracking-[0.3em]">
-              VS
-            </div>
-          </div>
-          
-          <h1 className="text-3xl sm:text-4xl md:text-6xl lg:text-7xl font-black uppercase text-white mb-2 sm:mb-3 drop-shadow-[0_0_20px_rgba(255,255,255,0.3)] px-2" style={{
-            textShadow: '0 0 10px rgba(239,68,68,0.5)'
-          }}>
-            {invite.senderName}
-          </h1>
-          <p className="text-red-500 font-bold tracking-[0.15em] sm:tracking-[0.2em] text-xs sm:text-sm uppercase px-2">
-            HAS CHALLENGED YOU
-          </p>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex flex-col sm:flex-row justify-center gap-3 sm:gap-4 mb-6 sm:mb-8 px-4">
-          <button 
-            onClick={onDecline}
-            className="action-button group relative px-6 sm:px-8 py-3 sm:py-4 bg-transparent border-2 border-gray-600 hover:border-red-500 text-gray-400 hover:text-white transition-all overflow-hidden order-2 sm:order-1"
-          >
-            <span className="flex items-center justify-center gap-2 font-bold uppercase tracking-wider text-sm">
-              <X size={18} />
-              DECLINE
-            </span>
-          </button>
-
-          <button 
-            onClick={onAccept}
-            className="action-button group relative px-8 sm:px-12 py-3 sm:py-4 bg-red-500 hover:bg-red-600 text-white shadow-[0_0_30px_rgba(239,68,68,0.5)] transition-all overflow-hidden order-1 sm:order-2"
-          >
-            {/* Shine effect */}
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-500"></div>
-            
-            <span className="relative z-10 flex items-center justify-center gap-2 font-black uppercase tracking-[0.15em]">
-              <Check size={24} />
-              ACCEPT
-            </span>
-
-            {/* Corner accents */}
-            <div className="absolute top-1 left-1 w-3 h-3 border-l-2 border-t-2 border-red-400"></div>
-            <div className="absolute bottom-1 right-1 w-3 h-3 border-r-2 border-b-2 border-red-400"></div>
-          </button>
-        </div>
-
-        {/* Timer Bar */}
-        <div className="w-full max-w-md mx-auto px-4">
-          <div className="h-2 bg-gray-800/50 border border-red-500/30 overflow-hidden relative">
-            <div 
-              ref={timerBarRef}
-              className="h-full bg-gradient-to-r from-red-600 to-red-500 shadow-[0_0_10px_rgba(239,68,68,0.8)] origin-left"
-            ></div>
-            
-            {/* Warning pulse overlay */}
-            <div className="warning-pulse absolute inset-0 bg-red-500/50 opacity-0"></div>
-          </div>
-          
-          <div className="flex items-center justify-center gap-2 mt-2">
-            <Clock size={12} className="text-red-500/70" />
-            <p className="text-red-500/70 text-[10px] font-mono uppercase tracking-wider">
-              AUTO-DECLINE IN <span className="text-red-500 font-bold">30 SECONDS</span>
-            </p>
-          </div>
         </div>
       </div>
 

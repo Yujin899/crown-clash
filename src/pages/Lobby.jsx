@@ -39,7 +39,7 @@ const Lobby = () => {
   const [friends, setFriends] = useState([]);
   const [loading, setLoading] = useState(false);
   const [waitingInviteId, setWaitingInviteId] = useState(null);
-  const [waitingForFriend, setWaitingForFriend] = useState(null);
+  const [waitingForResponse, setWaitingForResponse] = useState(null); // { friendName: string, avatar: string }
 
   const containerRef = useRef(null);
   const scannerRef = useRef(null);
@@ -269,7 +269,11 @@ const Lobby = () => {
       // Store in recipient's path
       await set(dbRef(rtdb, `gameInvites/${friend.uid}/${inviteId}`), inviteData);
       
-      toast.success("INVITE SENT - WAITING FOR RESPONSE", { id: toastId });
+      setWaitingForResponse({
+        friendName: friend.displayName,
+        avatar: friend.avatar || null
+      });
+      // toast.success("INVITE SENT - WAITING FOR RESPONSE", { id: toastId });
       
       // Listen for invite acceptance
       const inviteRef = dbRef(rtdb, `gameInvites/${friend.uid}/${inviteId}`);
@@ -277,6 +281,7 @@ const Lobby = () => {
         const data = snapshot.val();
         if (data?.status === 'accepted') {
           unsubscribe(); // Stop listening
+          setWaitingForResponse(null);
           toast.success("INVITE ACCEPTED - STARTING GAME!");
           
           // Ensure game state is starting (only update state, preserve questions!)
@@ -289,9 +294,14 @@ const Lobby = () => {
           setTimeout(() => navigate(`/game/${gameId}`), 1000);
         } else if (data?.status === 'declined') {
           unsubscribe();
+          setWaitingForResponse(null);
           toast.error("INVITE DECLINED");
           // Delete the game
           remove(dbRef(rtdb, `games/${gameId}`));
+        } else if (!data) {
+          // Invite removed (timeout or cancelled)
+          setWaitingForResponse(null);
+          unsubscribe();
         }
       });
       
@@ -354,7 +364,7 @@ const Lobby = () => {
   };
 
   return (
-    <div ref={containerRef} className="min-h-screen flex flex-col items-center justify-center p-6 bg-[#0f1923] text-white overflow-hidden relative">
+    <div ref={containerRef} className="min-h-screen flex flex-col items-center justify-center p-4 sm:p-6 bg-[#0f1923] text-white overflow-hidden relative">
       
       {/* Background Elements */}
       <div className="absolute inset-0 opacity-[0.03]" style={{
@@ -364,10 +374,10 @@ const Lobby = () => {
       }}></div>
 
       {/* Corner Brackets */}
-      <div className="absolute top-8 left-8 w-16 h-16 border-l-2 border-t-2 border-red-500/30"></div>
-      <div className="absolute top-8 right-8 w-16 h-16 border-r-2 border-t-2 border-red-500/30"></div>
-      <div className="absolute bottom-8 left-8 w-16 h-16 border-l-2 border-b-2 border-red-500/30"></div>
-      <div className="absolute bottom-8 right-8 w-16 h-16 border-r-2 border-b-2 border-red-500/30"></div>
+      <div className="absolute top-4 left-4 w-12 h-12 sm:top-8 sm:left-8 sm:w-16 sm:h-16 border-l-2 border-t-2 border-red-500/30"></div>
+      <div className="absolute top-4 right-4 w-12 h-12 sm:top-8 sm:right-8 sm:w-16 sm:h-16 border-r-2 border-t-2 border-red-500/30"></div>
+      <div className="absolute bottom-4 left-4 w-12 h-12 sm:bottom-8 sm:left-8 sm:w-16 sm:h-16 border-l-2 border-b-2 border-red-500/30"></div>
+      <div className="absolute bottom-4 right-4 w-12 h-12 sm:bottom-8 sm:right-8 sm:w-16 sm:h-16 border-r-2 border-b-2 border-red-500/30"></div>
 
       {/* Waiting Overlay */}
       <AnimatePresence>
@@ -421,32 +431,32 @@ const Lobby = () => {
           </div>
 
           <div className="search-text">
-            <div className="inline-block px-4 py-1 mb-4 border border-red-500/30 bg-red-500/10">
+            <div className="inline-block px-3 sm:px-4 py-1 mb-3 sm:mb-4 border border-red-500/30 bg-red-500/10">
               <span className="text-[10px] text-red-500 font-bold tracking-[0.3em] uppercase">
                 {status === 'searching' ? 'SCANNING NETWORK' : 'TARGET ACQUIRED'}
               </span>
             </div>
-            <h2 className="text-2xl md:text-4xl font-black tracking-wider uppercase text-white">
+            <h2 className="text-xl sm:text-2xl md:text-4xl font-black tracking-wider uppercase text-white px-4">
               {status === 'searching' ? 'FINDING OPPONENT' : 'MATCH CONFIRMED'}
             </h2>
           </div>
         </div>
       ) : (
-        <div ref={friendListRef} className="friend-container w-full max-w-2xl bg-[#1a2332]/90 backdrop-blur-md p-6 md:p-8 border-2 border-red-500/30 z-10 relative">
+        <div ref={friendListRef} className="friend-container w-full max-w-2xl bg-[#1a2332]/90 backdrop-blur-md p-4 sm:p-6 md:p-8 border-2 border-red-500/30 z-10 relative">
           {/* Corner accents */}
-          <div className="absolute top-0 left-0 w-8 h-8 border-l-4 border-t-4 border-red-500"></div>
-          <div className="absolute top-0 right-0 w-8 h-8 border-r-4 border-t-4 border-red-500"></div>
-          <div className="absolute bottom-0 left-0 w-8 h-8 border-l-4 border-b-4 border-red-500"></div>
-          <div className="absolute bottom-0 right-0 w-8 h-8 border-r-4 border-b-4 border-red-500"></div>
+          <div className="absolute top-0 left-0 w-6 h-6 sm:w-8 sm:h-8 border-l-2 sm:border-l-4 border-t-2 sm:border-t-4 border-red-500"></div>
+          <div className="absolute top-0 right-0 w-6 h-6 sm:w-8 sm:h-8 border-r-2 sm:border-r-4 border-t-2 sm:border-t-4 border-red-500"></div>
+          <div className="absolute bottom-0 left-0 w-6 h-6 sm:w-8 sm:h-8 border-l-2 sm:border-l-4 border-b-2 sm:border-b-4 border-red-500"></div>
+          <div className="absolute bottom-0 right-0 w-6 h-6 sm:w-8 sm:h-8 border-r-2 sm:border-r-4 border-b-2 sm:border-b-4 border-red-500"></div>
 
-          <div className="mb-6">
-            <div className="inline-block px-3 py-1 mb-3 border border-red-500/30 bg-red-500/10">
+          <div className="mb-4 sm:mb-6">
+            <div className="inline-block px-3 py-1 mb-2 sm:mb-3 border border-red-500/30 bg-red-500/10">
               <span className="text-[10px] text-red-500 font-bold tracking-[0.3em] uppercase">
                 SQUAD SELECT
               </span>
             </div>
-            <h2 className="text-2xl md:text-3xl font-black flex items-center gap-3 text-white uppercase">
-              <Users className="text-red-500" size={32} />
+            <h2 className="text-xl sm:text-2xl md:text-3xl font-black flex items-center gap-2 sm:gap-3 text-white uppercase">
+              <Users className="text-red-500" size={24} />
               YOUR ALLIES
             </h2>
           </div>
@@ -497,6 +507,51 @@ const Lobby = () => {
           )}
         </div>
       )}
+      {/* WAITING OVERLAY */}
+      <AnimatePresence>
+        {waitingForResponse && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-sm">
+             {/* Animated red scanlines */}
+            <div className="absolute inset-0 opacity-[0.03]" style={{
+              backgroundImage: `linear-gradient(rgba(239,68,68,0.8) 1px, transparent 1px)`,
+              backgroundSize: '100% 4px',
+              animation: 'scan 8s linear infinite'
+            }}></div>
+
+            <div className="text-center relative z-10 p-6">
+              {/* Spinner/Pulse */}
+              <div className="relative w-32 h-32 mx-auto mb-12">
+                <div className="absolute inset-0 border-4 border-red-500/30 rounded-full animate-ping"></div>
+                <div className="absolute inset-0 border-4 border-t-red-500 rounded-full animate-spin"></div>
+                {waitingForResponse.avatar?.url ? (
+                  <div className="absolute inset-2 rounded-full overflow-hidden border-4 border-black/50">
+                    <img src={waitingForResponse.avatar.url} className="w-full h-full object-cover opacity-80" alt="" />
+                  </div>
+                ) : (
+                  <Users className="absolute inset-0 m-auto text-red-500" size={32} />
+                )}
+              </div>
+
+              <h2 className="text-white text-3xl font-black uppercase tracking-wider mb-4 animate-pulse">
+                AWAITING RESPONSE
+              </h2>
+              <p className="text-gray-400 text-sm uppercase tracking-widest bg-red-500/10 py-2 px-4 inline-block border border-red-500/20">
+                CONTACTING <span className="text-red-500 font-bold ml-2">{waitingForResponse.friendName}</span>
+              </p>
+
+              <div className="mt-12">
+                <button 
+                  onClick={() => setWaitingForResponse(null)} // Local cancel only for now, potentially delete invite in future
+                  className="text-gray-500 hover:text-white text-xs font-bold uppercase tracking-[0.2em] transition-colors flex items-center justify-center gap-2 mx-auto group"
+                >
+                   <UserX size={14} className="group-hover:text-red-500 transition-colors" />
+                   CANCEL REQUEST
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

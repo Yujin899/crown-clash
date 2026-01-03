@@ -37,8 +37,8 @@ const GameResultOverlay = ({ result, myPlayer, enemyPlayer, questions, earnedXP,
 
       // 4. Stats container entrance
       tl.fromTo('.stats-container',
-        { y: 50, opacity: 0, scale: 0.9 },
-        { y: 0, opacity: 1, scale: 1, duration: 0.6, ease: 'back.out(1.5)' },
+        { y: 50, opacity: 0, scale: 0.95 },
+        { y: 0, opacity: 1, scale: 1, duration: 0.6, ease: 'power2.out' },
         '-=0.2'
       );
 
@@ -51,8 +51,8 @@ const GameResultOverlay = ({ result, myPlayer, enemyPlayer, questions, earnedXP,
 
       // 6. XP badge entrance
       tl.fromTo('.xp-badge',
-        { scale: 0, rotation: -45 },
-        { scale: 1, rotation: 0, duration: 0.5, ease: 'back.out(2)' },
+        { scale: 0.8, opacity: 0 },
+        { scale: 1, opacity: 1, duration: 0.5, ease: 'power2.out' },
         '-=0.2'
       );
 
@@ -71,14 +71,7 @@ const GameResultOverlay = ({ result, myPlayer, enemyPlayer, questions, earnedXP,
         '-=0.5'
       );
 
-      // 9. Final bounce
-      tl.to('.xp-badge', {
-        scale: 1.05,
-        duration: 0.2,
-        yoyo: true,
-        repeat: 1,
-        ease: 'power1.inOut'
-      });
+      // REMOVED: 9. Final bounce (User requested removal)
 
       // 10. Victory confetti effect
       if (isVictory) {
@@ -92,6 +85,7 @@ const GameResultOverlay = ({ result, myPlayer, enemyPlayer, questions, earnedXP,
       }
 
     }, containerRef);
+
 
     return () => ctx.revert();
   }, [isVictory, isDraw, earnedXP]);
@@ -123,7 +117,7 @@ const GameResultOverlay = ({ result, myPlayer, enemyPlayer, questions, earnedXP,
   });
 
   return (
-    <div ref={containerRef} className="fixed inset-0 z-[100] flex flex-col items-center justify-center overflow-hidden">
+    <div ref={containerRef} className="fixed inset-0 z-[100] flex flex-col items-center justify-center overflow-y-auto bg-[#0f1923] h-screen w-screen">
       
       {/* Flash overlay */}
       <div className={`result-flash absolute inset-0 ${isVictory ? 'bg-green-500' : isDraw ? 'bg-yellow-500' : 'bg-red-500'}`}></div>
@@ -204,10 +198,10 @@ const GameResultOverlay = ({ result, myPlayer, enemyPlayer, questions, earnedXP,
           <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-red-500 to-transparent"></div>
 
           {/* Player comparison */}
-          <div className="grid grid-cols-3 gap-4 mb-6">
+          <div className="grid grid-cols-3 gap-4 mb-6 items-center">
             {/* My stats */}
             <div className="text-center">
-              <div className="w-20 h-20 mx-auto mb-2 border-2 border-blue-500 overflow-hidden clip-path-notch">
+              <div className="w-20 h-20 sm:w-24 sm:h-24 mx-auto mb-3 border-2 border-blue-500 overflow-hidden clip-path-notch relative">
                 {myPlayer?.avatar?.url ? (
                   <img src={myPlayer.avatar.url} alt="" className="w-full h-full object-cover" />
                 ) : (
@@ -215,21 +209,24 @@ const GameResultOverlay = ({ result, myPlayer, enemyPlayer, questions, earnedXP,
                     <Target size={32} className="text-blue-500" />
                   </div>
                 )}
+                {/* Corner accents */}
+                <div className="absolute top-0 left-0 w-2 h-2 border-l border-t border-blue-400"></div>
+                <div className="absolute bottom-0 right-0 w-2 h-2 border-r border-b border-blue-400"></div>
               </div>
-              <p className="text-white font-bold uppercase text-sm truncate">{myPlayer?.name || 'You'}</p>
-              <p className="text-blue-500 text-2xl font-black">{myCorrect}/{questions.length}</p>
+              <p className="text-white font-bold uppercase text-sm truncate px-2">{myPlayer?.name || 'You'}</p>
+              <p className="text-blue-500 text-3xl font-black">{myCorrect}<span className="text-sm text-gray-500">/{questions.length}</span></p>
             </div>
 
             {/* VS */}
-            <div className="flex items-center justify-center">
-              <div className="w-16 h-16 bg-[#0f1923] border-2 border-red-500 flex items-center justify-center clip-path-notch">
-                <span className="text-red-500 font-black text-xl">VS</span>
+            <div className="flex flex-col items-center justify-center">
+              <div className="w-12 h-12 sm:w-16 sm:h-16 bg-[#0f1923] border-2 border-white/20 flex items-center justify-center clip-path-notch mb-2">
+                <span className="text-white font-black text-xl italic">VS</span>
               </div>
             </div>
 
             {/* Enemy stats */}
             <div className="text-center">
-              <div className="w-20 h-20 mx-auto mb-2 border-2 border-red-500 overflow-hidden clip-path-notch">
+              <div className="w-20 h-20 sm:w-24 sm:h-24 mx-auto mb-3 border-2 border-red-500 overflow-hidden clip-path-notch relative">
                 {enemyPlayer?.avatar?.url ? (
                   <img src={enemyPlayer.avatar.url} alt="" className="w-full h-full object-cover" />
                 ) : (
@@ -237,9 +234,12 @@ const GameResultOverlay = ({ result, myPlayer, enemyPlayer, questions, earnedXP,
                     <Target size={32} className="text-red-500" />
                   </div>
                 )}
+                 {/* Corner accents */}
+                 <div className="absolute top-0 left-0 w-2 h-2 border-l border-t border-red-400"></div>
+                 <div className="absolute bottom-0 right-0 w-2 h-2 border-r border-b border-red-400"></div>
               </div>
-              <p className="text-white font-bold uppercase text-sm truncate">{enemyPlayer?.name || 'Opponent'}</p>
-              <p className="text-red-500 text-2xl font-black">{enemyCorrect}/{questions.length}</p>
+              <p className="text-white font-bold uppercase text-sm truncate px-2">{enemyPlayer?.name || 'Opponent'}</p>
+              <p className="text-red-500 text-3xl font-black">{enemyCorrect}<span className="text-sm text-gray-500">/{questions.length}</span></p>
             </div>
           </div>
 
