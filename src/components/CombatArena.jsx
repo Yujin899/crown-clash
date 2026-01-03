@@ -108,14 +108,14 @@ const CombatArena = ({
                         </div>
 
                         {/* Question Text */}
-                        <div className="flex-1 flex items-center justify-center px-6 py-4 relative z-10">
+                        <div className="flex-1 flex items-center justify-center px-6 py-4 relative z-10 overflow-y-auto">
                             <h3 className="text-lg md:text-2xl font-bold text-center text-white leading-tight drop-shadow-lg">
                                 {q.question}
                             </h3>
                         </div>
 
                         {/* Options */}
-                        <div className="px-6 pb-8 space-y-3">
+                        <div className="px-6 pb-8 space-y-3 overflow-y-auto max-h-[400px]">
                             {q.options.map((opt, idx) => {
                                 const isSelected = myAnswers[qIndex] === opt;
                                 return (

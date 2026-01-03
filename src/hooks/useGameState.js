@@ -83,21 +83,36 @@ export const useGameState = (roomId, user, navigate) => {
     };
   }, [roomId, user, navigate, myId, enemyId]);
 
-  // Start game logic - No timer needed
+  // Start game logic - Solo instant, Multiplayer with overlay
   useEffect(() => {
     if (!processingRef.current) {
       processingRef.current = true;
     }
 
-    // Both modes: start immediately, no timer
-    setIsOverlayVisible(false);
-    
-    if (isHost && roomId) {
-      update(ref(rtdb, `games/${roomId}`), { 
-        state: 'combat'
-      }).catch(e => console.log("Lag"));
+    // Solo mode: start immediately, no overlay
+    if (isSoloMode) {
+      setIsOverlayVisible(false);
+      if (isHost && roomId) {
+        update(ref(rtdb, `games/${roomId}`), { 
+          state: 'combat'
+        }).catch(e => console.log("Lag"));
+      }
+      return;
     }
-  }, [isHost, roomId]);
+
+    // Multiplayer mode: show overlay, then start after delay
+    const startTimer = setTimeout(() => {
+      setIsOverlayVisible(false);
+      
+      if (isHost && roomId) {
+        update(ref(rtdb, `games/${roomId}`), { 
+          state: 'combat'
+        }).catch(e => console.log("Lag"));
+      }
+    }, 5500); // 5.5 second delay for overlay animation
+
+    return () => clearTimeout(startTimer);
+  }, [isHost, roomId, isSoloMode]);
 
 
   // Progress tracking
