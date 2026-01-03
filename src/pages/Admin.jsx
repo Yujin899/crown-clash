@@ -5,13 +5,14 @@ import {
   collection, getDocs, doc, getDoc, setDoc, deleteDoc, updateDoc, 
   addDoc, query, where, writeBatch
 } from 'firebase/firestore';
-import { db } from '../firebaseConfig';
+import { ref as dbRef, onValue, remove, orderByChild, limitToLast, query as rtdbQuery } from 'firebase/database';
+import { db, rtdb } from '../firebaseConfig';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   BookOpen, Users, Settings, BarChart3, Plus, Edit, Trash2, 
   Search, Download, Upload, Shield, Home, X, Save, ChevronRight,
-  User as UserIcon, TrendingUp, ChevronLeft, FileJson, Loader
+  User as UserIcon, TrendingUp, ChevronLeft, FileJson, Loader, MessageCircle
 } from 'lucide-react';
 
 const Admin = () => {
@@ -69,6 +70,7 @@ const Admin = () => {
   const tabs = [
     { id: 'subjects', label: 'SUBJECTS', icon: BookOpen },
     { id: 'users', label: 'USERS', icon: Users },
+    { id: 'chat', label: 'CHAT', icon: MessageCircle },
     { id: 'analytics', label: 'ANALYTICS', icon: BarChart3 },
     { id: 'settings', label: 'SETTINGS', icon: Settings },
   ];
@@ -192,6 +194,7 @@ const Admin = () => {
           />
         )}
         {activeTab === 'users' && <UsersManager />}
+        {activeTab === 'chat' && <ChatManager />}
         {activeTab === 'analytics' && <AnalyticsDashboard />}
         {activeTab === 'settings' && <SettingsPanel />}
       </div>
@@ -1311,6 +1314,117 @@ const SettingsPanel = () => {
       <h2 className="text-2xl font-black uppercase mb-6">Settings</h2>
       <div className="bg-[#1a2332] border border-red-500/20 p-6">
         <p className="text-gray-400">System settings will be added here.</p>
+      </div>
+    </div>
+  );
+};
+
+// CHAT MANAGER
+const ChatManager = () => {
+  const [messages, setMessages] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Subscribe to last 50 messages
+    const messagesRef = dbRef(rtdb, 'globalChat');
+    const q = rtdbQuery(messagesRef, limitToLast(50));
+
+    const unsubscribe = onValue(q, (snapshot) => {
+      const data = [];
+      snapshot.forEach((child) => {
+        data.push({ id: child.key, ...child.val() });
+      });
+      // Reverse to show newest first for admin convenience
+      setMessages(data.reverse());
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const handleDelete = async (msgId) => {
+    if (!window.confirm('Delete this message?')) return;
+    try {
+      await remove(dbRef(rtdb, `globalChat/${msgId}`));
+      toast.success('Message deleted');
+    } catch (error) {
+      toast.error('Failed to delete message');
+    }
+  };
+
+  const handleClearChat = async () => {
+    if (!window.confirm('WARNING: THIS WILL DELETE ALL MESSAGES. Are you sure?')) return;
+    try {
+      await remove(dbRef(rtdb, 'globalChat'));
+      toast.success('Chat cleared');
+    } catch (error) {
+      toast.error('Failed to clear chat');
+    }
+  };
+
+  if (loading) return <div className="text-center py-12 text-gray-400">Loading messages...</div>;
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h2 className="text-2xl font-black uppercase">Global Chat</h2>
+          <p className="text-gray-400 text-sm">Moderation Console ({messages.length} messages)</p>
+        </div>
+        <button 
+          onClick={handleClearChat}
+          className="flex items-center gap-2 px-4 py-2 border border-red-500 text-red-500 hover:bg-red-500 hover:text-white font-bold text-sm uppercase transition-all"
+        >
+          <Trash2 size={18} />
+          Clear All
+        </button>
+      </div>
+
+      <div className="bg-[#1a2332] border border-red-500/20 rounded-lg overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead className="bg-[#0f1923] border-b border-red-500/20">
+              <tr>
+                <th className="p-4 font-bold text-gray-400 text-sm uppercase">Time</th>
+                <th className="p-4 font-bold text-gray-400 text-sm uppercase">User</th>
+                <th className="p-4 font-bold text-gray-400 text-sm uppercase">Message</th>
+                <th className="p-4 font-bold text-gray-400 text-sm uppercase text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-red-500/10">
+              {messages.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="p-8 text-center text-gray-500 uppercase tracking-widest">
+                    No messages found
+                  </td>
+                </tr>
+              ) : (
+                messages.map((msg) => (
+                  <tr key={msg.id} className="hover:bg-white/5 transition-colors">
+                    <td className="p-4 text-gray-400 text-sm whitespace-nowrap">
+                      {new Date(msg.timestamp).toLocaleTimeString()}
+                    </td>
+                    <td className="p-4 font-bold text-red-400 uppercase text-sm">
+                      {msg.sender}
+                    </td>
+                    <td className="p-4 text-white text-sm max-w-md truncate">
+                      {msg.text}
+                    </td>
+                    <td className="p-4 text-right">
+                      <button 
+                        onClick={() => handleDelete(msg.id)}
+                        className="p-2 text-gray-500 hover:text-red-500 hover:bg-red-500/10 rounded transition-colors"
+                        title="Delete Message"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
