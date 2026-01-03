@@ -133,34 +133,41 @@ export const useGameState = (roomId, user, navigate) => {
     await set(ref(rtdb, `games/${roomId}/players/${myId}/answers/${qIndex}`), option);
     await set(ref(rtdb, `games/${roomId}/players/${myId}/answerTimestamps/${qIndex}`), now);
 
-    // ANTI-SPAM DETECTION: Check last 5 answers
+    // ANTI-SPAM DETECTION: Check for rapid answering
     const myPlayerData = game.players[myId];
     const allAnswers = { ...(myPlayerData?.answers || {}), [qIndex]: option };
     const allTimestamps = { ...(myPlayerData?.answerTimestamps || {}), [qIndex]: now };
     
-    if (Object.keys(allAnswers).length >= 5) {
-      // Get last 5 answers by sorting timestamps  
-      const sortedEntries = Object.entries(allTimestamps).sort(([, a], [, b]) => b - a).slice(0, 5);
+    // Check after at least 7 answers
+    if (Object.keys(allAnswers).length >= 7) {
+      // Get last 7 answers by sorting timestamps  
+      const sortedEntries = Object.entries(allTimestamps).sort(([, a], [, b]) => b - a).slice(0, 7);
       const recentIndices = sortedEntries.map(([idx]) => idx);
       const timestamps = sortedEntries.map(([, ts]) => ts);
       const timeSpan = (Math.max(...timestamps) - Math.min(...timestamps)) / 1000; // seconds
       
-      // Count wrong answers in recent 5
+      // Count wrong answers in recent 7
       const wrongCount = recentIndices.filter(idx => {
         const ans = allAnswers[idx];
         const q = game.questions[parseInt(idx)];
         return ans !== q?.correctAnswer;
       }).length;
       
-      // SPAM CRITERIA: 5 answers in < 45s with 4+ wrong (Refined)
-      if (timeSpan < 45 && wrongCount >= 4) {
-        console.log('🚨 SPAM DETECTED!', { timeSpan, wrongCount });
+      // SPAM CRITERIA: 7 answers in < 60 seconds with 5+ wrong
+      if (timeSpan < 60 && wrongCount >= 5) {
+        console.log('🚨 SPAM DETECTED!', { timeSpan, wrongCount, answers: recentIndices.length });
         const opponentId = Object.keys(game.players).find(id => id !== myId);
+        
+        // Immediately end game - opponent wins
         await update(ref(rtdb, `games/${roomId}`), {
-          winner: opponentId,
+          winner: opponentId || 'none',
           reason: 'spam_detected',
-          state: 'finished'
+          state: 'finished',
+          spamDetails: { timeSpan, wrongCount, playerId: myId }
         });
+        
+        console.warn('⚠️ Game ended due to spam detection');
+        return; // Stop further processing
       }
     }
   }, [roomId, myId, game]);
