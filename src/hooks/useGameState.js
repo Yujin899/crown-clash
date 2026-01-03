@@ -66,12 +66,12 @@ export const useGameState = (roomId, user, navigate) => {
         });
       }
 
-      // Handle enemy disconnect - ONLY if game is in combat mode  
+      // Handle enemy disconnect - End game immediately when enemy disconnects
       if (data.state === 'combat' && enemyId && data.players[enemyId]?.connected === false && !data.winner) {
-        console.log('⚠️ Enemy disconnected - ending game');
+        console.log('🚨 Enemy disconnected - ending game immediately');
         update(ref(rtdb, `games/${roomId}`), { 
           winner: myId, 
-          reason: 'disconnect',
+          reason: 'enemy_left',
           state: 'finished'
         });
       }
@@ -278,6 +278,36 @@ export const useGameState = (roomId, user, navigate) => {
     }
   }, [game?.winner, game?.reason, animationType, myId, isSoloMode]);
 
+  // Handle leaving/aborting the game
+  const handleLeaveGame = useCallback(async () => {
+    if (!roomId || !myId) return;
+
+    try {
+      console.log('👋 Player leaving game...');
+      
+      // Mark player as disconnected
+      await update(ref(rtdb, `games/${roomId}/players/${myId}`), {
+        connected: false
+      });
+
+      // If in combat and no winner yet, end the game
+      if (game?.state === 'combat' && !game.winner) {
+        await update(ref(rtdb, `games/${roomId}`), {
+          winner: enemyId || 'none', // Enemy wins if multiplayer
+          reason: 'player_left',
+          state: 'finished'
+        });
+      }
+
+      // Navigate to dashboard
+      navigate('/dashboard');
+    } catch (error) {
+      console.error('Error leaving game:', error);
+      // Navigate anyway
+      navigate('/dashboard');
+    }
+  }, [roomId, myId, game, enemyId, navigate]);
+
   return {
     // State
     game,
@@ -298,6 +328,7 @@ export const useGameState = (roomId, user, navigate) => {
     // Handlers
     handleAnswer,
     handleTriggerKill: handleGameEndCheck, // Expose as same name for compatibility with CombatArena
+    handleLeaveGame, // For aborting/leaving the game
     onAnimationComplete,
     updateXP
   };
