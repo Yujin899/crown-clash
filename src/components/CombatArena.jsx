@@ -1,4 +1,4 @@
-import React, { memo, useRef, useState } from 'react';
+import React, { memo, useRef, useEffect, useState } from 'react';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { EffectCards } from 'swiper/modules';
 import { Shield, Zap, Crosshair, CheckCircle, Target } from 'lucide-react';
@@ -16,22 +16,38 @@ const CombatArena = ({
   const swiperRef = useRef(null);
   const [activeIndex, setActiveIndex] = useState(0);
 
-  // Check if current question is answered
-  const isCurrentAnswered = myAnswers[activeIndex] !== undefined;
+  // OPTIMIZATION: Imperatively update Swiper lock state to prevent re-renders
+  useEffect(() => {
+    if (swiperRef.current) {
+        const swiper = swiperRef.current;
+        const isAnswered = myAnswers[activeIndex] !== undefined;
+        // Allow next if answered or it's the kill screen (last slide)
+        const isKillScreen = activeIndex >= questions.length;
+        
+        // Directly update Swiper instance properties
+        swiper.allowSlideNext = isAnswered || isKillScreen;
+        
+        // Force update button state if needed, but usually not required for core mechanics
+        swiper.update();
+    }
+  }, [activeIndex, myAnswers, questions.length]);
 
   return (
     <div className={`absolute inset-0 flex items-center justify-center z-10 ${didShoot ? 'animate-recoil' : ''}`}>
         <div className="w-[300px] h-[520px] sm:w-[340px] sm:h-[560px] md:w-[420px] md:h-[640px] perspective-1000">
             <Swiper 
-                onSwiper={(swiper) => swiperRef.current = swiper}
+                onSwiper={(swiper) => {
+                    swiperRef.current = swiper;
+                    // Initialize lock state
+                    swiper.allowSlideNext = false;
+                }}
                 onSlideChange={(swiper) => setActiveIndex(swiper.activeIndex)}
                 effect={'cards'} 
                 grabCursor={true} 
                 modules={[EffectCards]} 
                 className="w-full h-full"
-                speed={300}
+                speed={150} // Faster transition for snappier feel
                 allowTouchMove={true}
-                allowSlideNext={isCurrentAnswered || activeIndex >= questions.length}
             >
                 
                 {/* 1. QUESTIONS CARDS */}
